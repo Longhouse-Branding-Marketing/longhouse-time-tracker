@@ -237,69 +237,41 @@ async function insertIgnoringDuplicates(
   let skipped = 0;
   let lastError: string | undefined;
 
-  function countInserted(data: { id?: unknown }[] | null, expected: number): number {
-    const n = data?.length ?? 0;
-    // PostgREST sometimes returns 201 with an empty body; treat success as full batch.
-    return n > 0 ? n : expected;
+  async function rpcInsert(payload: Omit<TimeEntryInsert, "employee_id">[]): Promise<number> {
+    const { data, error } = await supabase.rpc("import_time_entries_ignore_dups", {
+      payload,
+    });
+    if (error) {
+      lastError = error.message;
+      return -1;
+    }
+    return Number(data ?? 0);
   }
 
   for (let i = 0; i < rows.length; i += INSERT_BATCH) {
     const chunk = rows.slice(i, i + INSERT_BATCH);
     const rpcPayload = stripForRpc(chunk);
 
-    const rpc = await supabase.rpc("import_time_entries_ignore_dups", {
-      payload: rpcPayload,
-    });
-
-    if (rpc.error) {
-      lastError = rpc.error.message;
-    } else {
-      const wrote = Number(rpc.data ?? 0);
-      if (Number.isFinite(wrote) && wrote > 0) {
-        inserted += wrote;
-        skipped += Math.max(0, chunk.length - wrote);
-        continue;
-      }
-    }
-
-    const batchInsert = await supabase
-      .from("time_entries")
-      .insert(rpcPayload)
-      .select("id");
-
-    if (!batchInsert.error) {
-      inserted += countInserted(batchInsert.data, chunk.length);
+    const batchWrote = await rpcInsert(rpcPayload);
+    if (batchWrote > 0) {
+      inserted += batchWrote;
+      skipped += Math.max(0, chunk.length - batchWrote);
       continue;
     }
 
-    lastError = batchInsert.error.message;
-
-    if (isUniqueViolation(batchInsert.error)) {
-      skipped += chunk.length;
-      continue;
+    if (batchWrote < 0) {
+      return { inserted, skipped, hardError: lastError };
     }
 
+    // RPC returned 0 — row-by-row so one duplicate does not fail the whole batch.
     for (const row of chunk) {
       const onePayload = stripForRpc([row]);
-      const one = await supabase.from("time_entries").insert(onePayload[0]).select("id");
-
-      if (!one.error) {
-        inserted += countInserted(one.data, 1);
-        continue;
+      const oneWrote = await rpcInsert(onePayload);
+      if (oneWrote < 0) {
+        return { inserted, skipped, hardError: lastError };
       }
-
-      lastError = one.error.message;
-
-      if (isUniqueViolation(one.error)) {
-        skipped += 1;
-        continue;
-      }
-
-      return {
-        inserted,
-        skipped,
-        hardError: one.error.message,
-      };
+      if (oneWrote > 0) inserted += 1;
+      else skipped += 1;
     }
   }
 
@@ -503,14 +475,17 @@ export async function commitImport(
 
     if (newRows.length > 0 && result.inserted === 0) {
       if (result.skipped >= newRows.length) {
-        revalidateAfterImport();
         return {
-          ok: true,
+          ok: false,
+          error:
+            `All ${newRows.length} rows were skipped at insert time (matching entry_hash already in the database). ` +
+            "Re-upload to refresh preview, or run supabase/migrations/010_find_existing_entry_hashes.sql if preview still shows rows as New.",
           processed: totalRows,
           inserted: 0,
           skippedDuplicate,
           rejected,
-          ...resultMeta,
+          dbTimeEntryCount,
+          dbProjectRef,
         };
       }
       const detail = result.hardError
