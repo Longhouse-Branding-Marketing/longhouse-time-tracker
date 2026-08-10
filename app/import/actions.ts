@@ -15,7 +15,7 @@ import {
   type ExistingEntryForDedup,
 } from "@/lib/import/dedup";
 import type { HashFields } from "@/lib/import/hash";
-import { isUniqueViolation } from "@/lib/import/pg-errors";
+import { isEntryHashConflict, isIdentitySequenceConflict, isUniqueViolation } from "@/lib/import/pg-errors";
 import { bustMemoryCache } from "@/lib/memory-cache";
 import { getSupabaseServiceRole } from "@/lib/supabase";
 import type {
@@ -455,7 +455,21 @@ export async function commitImport(
     skippedDuplicate += result.skipped;
 
     if (result.hardError) {
-      if (isUniqueViolation({ message: result.hardError })) {
+      if (isIdentitySequenceConflict({ message: result.hardError })) {
+        return {
+          ok: false,
+          error:
+            "New rows could not get an id — the time_entries id sequence is out of sync after the legacy migration. " +
+            "Run supabase/migrations/011_reset_identity_sequences.sql in the Hub SQL editor, then import again.",
+          processed: totalRows,
+          inserted: result.inserted,
+          skippedDuplicate,
+          rejected,
+          dbTimeEntryCount,
+          dbProjectRef,
+        };
+      }
+      if (isEntryHashConflict({ message: result.hardError })) {
         skippedDuplicate += Math.max(
           0,
           newRows.length - result.inserted - result.skipped
@@ -494,9 +508,8 @@ export async function commitImport(
       return {
         ok: false,
         error:
-          `Import could not insert rows (${newRows.length} expected).` +
-          detail +
-          " Run supabase/migrations/009_entry_hash_unique_constraint.sql in the Hub SQL editor, then try again.",
+          `Import could not insert rows (${newRows.length} expected).${detail} ` +
+          "If the message mentions time_entries_pkey, run supabase/migrations/011_reset_identity_sequences.sql.",
         processed: totalRows,
         inserted: 0,
         skippedDuplicate,

@@ -88,6 +88,9 @@ async function main() {
   }
 
   console.log("Done. Run: node --env-file=.env.local scripts/verify-supabase.mjs");
+  console.log(
+    "If imports fail with time_entries_pkey, run supabase/migrations/011_reset_identity_sequences.sql on Hub."
+  );
 }
 
 main().catch((err) => {
