@@ -23,7 +23,13 @@ import type {
   ImportDuplicateRow,
   ImportPreviewResult,
 } from "@/lib/import/import-action-types";
-import { existingHashSet, loadExistingInRange } from "./entry-db";
+import { countTimeEntries, existingHashSet, loadExistingInRange } from "./entry-db";
+
+function supabaseProjectRef(): string {
+  const url = process.env.SUPABASE_URL ?? "";
+  const match = url.match(/https:\/\/([^.]+)\.supabase\.co/);
+  return match?.[1] ?? "unknown";
+}
 
 const DUPLICATE_LIST_LIMIT = 200;
 
@@ -129,11 +135,13 @@ function seedKnownHashes(
 function partitionAgainstExisting(
   unique: TimeEntryInsert[],
   existing: ExistingEntryForDedup[],
-  knownHashes: Set<string>
+  knownHashes: Set<string>,
+  options?: { hashOnly?: boolean }
 ): { newRows: TimeEntryInsert[]; skippedRows: TimeEntryInsert[] } {
   const newRows: TimeEntryInsert[] = [];
   const skippedRows: TimeEntryInsert[] = [];
   const accepted = new Set<string>();
+  const hashOnly = options?.hashOnly ?? false;
 
   for (const row of unique) {
     const canonical = canonicalizeInsert(row);
@@ -146,11 +154,13 @@ function partitionAgainstExisting(
       continue;
     }
 
-    const fields = insertToHashFields(canonical);
-    if (existing.some((ex) => isDuplicateOfExisting(fields, ex))) {
-      skippedRows.push(canonical);
-      knownHashes.add(canonical.entry_hash);
-      continue;
+    if (!hashOnly) {
+      const fields = insertToHashFields(canonical);
+      if (existing.some((ex) => isDuplicateOfExisting(fields, ex))) {
+        skippedRows.push(canonical);
+        knownHashes.add(canonical.entry_hash);
+        continue;
+      }
     }
 
     accepted.add(canonical.entry_hash);
@@ -188,7 +198,8 @@ async function resolveImportNewRows(
   const { newRows, skippedRows } = partitionAgainstExisting(
     unique,
     existing,
-    knownHashes
+    knownHashes,
+    { hashOnly: true }
   );
   return { parsed, unique, newRows, intraDuplicates, skippedRows };
 }
@@ -316,6 +327,8 @@ export async function previewImport(
     rows: [],
     duplicates: [],
     duplicatesTotal: 0,
+    dbTimeEntryCount: 0,
+    dbProjectRef: supabaseProjectRef(),
     sample: [],
   });
 
@@ -348,6 +361,9 @@ export async function previewImport(
         rejected: parsedOnly.rejected.slice(0, 50),
       };
     }
+
+    const dbTimeEntryCount = await countTimeEntries();
+    const dbProjectRef = supabaseProjectRef();
 
     const { parsed, unique, newRows, intraDuplicates, skippedRows } =
       await resolveImportNewRows(csvText, sourceFile);
@@ -395,6 +411,8 @@ export async function previewImport(
       rows: newRows,
       duplicates,
       duplicatesTotal,
+      dbTimeEntryCount,
+      dbProjectRef,
       sample,
     };
   } catch (e) {
@@ -440,10 +458,14 @@ export async function commitImport(
   }
 
   try {
+    const dbTimeEntryCount = await countTimeEntries();
+    const dbProjectRef = supabaseProjectRef();
+
     const { parsed, newRows, intraDuplicates, skippedRows } =
       await resolveImportNewRows(csvText, sourceFile);
     const totalRows = meta?.totalRows ?? parsed.totalRows;
     let skippedDuplicate = intraDuplicates.length + skippedRows.length;
+    const resultMeta = { dbTimeEntryCount, dbProjectRef };
 
     if (newRows.length === 0) {
       return {
@@ -452,6 +474,7 @@ export async function commitImport(
         inserted: 0,
         skippedDuplicate,
         rejected,
+        ...resultMeta,
       };
     }
 
@@ -473,6 +496,7 @@ export async function commitImport(
           inserted: result.inserted,
           skippedDuplicate,
           rejected,
+          ...resultMeta,
         };
       }
     }
@@ -486,6 +510,7 @@ export async function commitImport(
           inserted: 0,
           skippedDuplicate,
           rejected,
+          ...resultMeta,
         };
       }
       const detail = result.hardError
@@ -501,16 +526,20 @@ export async function commitImport(
         inserted: 0,
         skippedDuplicate,
         rejected,
+        ...resultMeta,
       };
     }
 
     revalidateAfterImport();
+    const afterCount = await countTimeEntries();
     return {
       ok: true,
       processed: totalRows,
       inserted: result.inserted,
       skippedDuplicate,
       rejected,
+      dbTimeEntryCount: afterCount,
+      dbProjectRef,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

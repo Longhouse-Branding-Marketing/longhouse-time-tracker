@@ -334,6 +334,23 @@ export function ImportView() {
 
         {preview && preview.ok ? (
           <Panel title="Preview">
+            <p className="mb-4 text-[12px] leading-snug text-muted">
+              Import reads and writes project{" "}
+              <span className="font-mono font-medium text-ink">
+                {preview.dbProjectRef}
+              </span>{" "}
+              —{" "}
+              <span className="font-medium tabular-nums text-ink">
+                {preview.dbTimeEntryCount.toLocaleString()}
+              </span>{" "}
+              rows in{" "}
+              <span className="font-medium text-ink">time_entries</span> today.
+              If Table Editor looks empty, confirm you opened the same project ref
+              (Settings → General). Table Editor can also hide rows when RLS is
+              enabled — use SQL{" "}
+              <span className="font-mono">select count(*) from time_entries</span>{" "}
+              to verify.
+            </p>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Stat label="Rows" value={preview.totalRows} />
               <Stat label="New" value={preview.wouldInsert} tone="ok" />
@@ -479,6 +496,19 @@ export function ImportView() {
 
         {result?.ok ? (
           <Panel title="Import Complete">
+            {result.dbProjectRef != null && result.dbTimeEntryCount != null ? (
+              <p className="mb-3 text-[12px] text-muted">
+                Database{" "}
+                <span className="font-mono font-medium text-ink">
+                  {result.dbProjectRef}
+                </span>{" "}
+                now has{" "}
+                <span className="font-medium tabular-nums text-ink">
+                  {result.dbTimeEntryCount.toLocaleString()}
+                </span>{" "}
+                rows in time_entries.
+              </p>
+            ) : null}
             <p className="text-[14px] text-ink">
               <span className="font-semibold tabular-nums">
                 {result.processed.toLocaleString()}

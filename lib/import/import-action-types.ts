@@ -30,6 +30,10 @@ export type ImportPreviewResult = {
   /** Reviewable duplicate CSV rows (may be capped; see duplicatesTotal). */
   duplicates: ImportDuplicateRow[];
   duplicatesTotal: number;
+  /** Rows in public.time_entries on the server Supabase project (service role). */
+  dbTimeEntryCount: number;
+  /** Project ref from SUPABASE_URL (e.g. rtwnjmhfcmttterxagge). */
+  dbProjectRef: string;
   sample: Array<{
     person: string;
     date: string;
@@ -48,4 +52,6 @@ export type ImportCommitResult = {
   inserted: number;
   skippedDuplicate: number;
   rejected: number;
+  dbTimeEntryCount?: number;
+  dbProjectRef?: string;
 };
