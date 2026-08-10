@@ -1,13 +1,23 @@
 -- ON CONFLICT (entry_hash) in import RPC requires a non-partial UNIQUE constraint.
--- 006 may leave only a partial unique index; 004 might not have run on Hub.
-
-DROP INDEX IF EXISTS public.time_entries_entry_hash_key;
+-- Drop constraint before index: Postgres attaches the index to UNIQUE constraints.
 
 ALTER TABLE public.time_entries
   DROP CONSTRAINT IF EXISTS time_entries_entry_hash_key;
 
-ALTER TABLE public.time_entries
-  ADD CONSTRAINT time_entries_entry_hash_key UNIQUE (entry_hash);
+DROP INDEX IF EXISTS public.time_entries_entry_hash_key;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'time_entries_entry_hash_key'
+      AND conrelid = 'public.time_entries'::regclass
+  ) THEN
+    ALTER TABLE public.time_entries
+      ADD CONSTRAINT time_entries_entry_hash_key UNIQUE (entry_hash);
+  END IF;
+END $$;
 
 -- Reliable insert count (ROW_COUNT can be 0 in some client paths).
 CREATE OR REPLACE FUNCTION public.import_time_entries_ignore_dups(payload jsonb)
