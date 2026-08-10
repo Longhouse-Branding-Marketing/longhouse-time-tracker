@@ -206,6 +206,10 @@ export function ImportView() {
     reader.onload = () => {
       const text = typeof reader.result === "string" ? reader.result : "";
       setCsvText(text);
+      if (!accessToken) {
+        setError("Session not ready. Wait a moment and try again.");
+        return;
+      }
       startTransition(async () => {
         const p = await previewImport(accessToken, text, file.name);
         setPreview(p);
@@ -214,7 +218,7 @@ export function ImportView() {
     };
     reader.onerror = () => setError("Could not read the selected file.");
     reader.readAsText(file);
-  }, []);
+  }, [accessToken]);
 
   return (
     <PageShell>
@@ -438,9 +442,14 @@ export function ImportView() {
                   disabled={pending}
                   onClick={() => {
                     if (!csvText || !fileName) return;
+                    if (!accessToken) {
+                      setError("Session not ready. Wait a moment and try again.");
+                      return;
+                    }
                     startTransition(async () => {
                       const p = await previewImport(accessToken, csvText, fileName);
                       setPreview(p);
+                      if (!p.ok && p.error) setError(p.error);
                     });
                   }}
                 >
