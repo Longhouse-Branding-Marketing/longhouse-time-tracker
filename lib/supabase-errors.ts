@@ -24,5 +24,12 @@ export function humanizeSupabaseError(view: string, message: string): string {
       `(token clock skew). Please try again in a moment.`
     );
   }
+  if (message.toLowerCase().includes("invalid api key")) {
+    return (
+      `Supabase view "${view}" failed: Invalid API key. ` +
+      `Check that SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are both from the same ` +
+      `Supabase project (Tools Hub), then redeploy. The legacy time-tracking project key will not work on the Hub URL.`
+    );
+  }
   return `Supabase view "${view}" failed: ${message}`;
 }

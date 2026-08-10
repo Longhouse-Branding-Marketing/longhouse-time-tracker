@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { FilterBar } from "@/components/FilterBar";
 import { Avatar, PageHeader, PageShell, Panel, StatCard } from "@/components/ui";
@@ -270,6 +271,17 @@ export function HomeDashboard({
   return (
     <PageShell>
       <PageHeader title="Where Is Our Time Going?" />
+
+      {!bounds.min ? (
+        <p className="mt-5 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-muted">
+          There are no time entries in this database yet. Charts will stay empty until
+          you import data or run the legacy migration script. See{" "}
+          <Link href="/import" className="font-medium text-brand-600 hover:underline">
+            Import
+          </Link>
+          .
+        </p>
+      ) : null}
 
       <div className="mt-5">
         <FilterBar

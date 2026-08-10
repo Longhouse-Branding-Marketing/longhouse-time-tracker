@@ -13,6 +13,11 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 const DOW = ["S", "M", "T", "W", "T", "F", "S"];
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isIsoDate(s: string): boolean {
+  return ISO_DATE.test(s);
+}
 
 interface Range {
   from: string;
@@ -30,7 +35,8 @@ function parse(s: string) {
   return { y, m: m - 1, d };
 }
 function viewOf(s: string) {
-  const { y, m } = parse(s);
+  const source = isIsoDate(s) ? s : today();
+  const { y, m } = parse(source);
   return { y, m };
 }
 function addDays(s: string, delta: number) {
@@ -57,8 +63,11 @@ function firstDow(y: number, m: number) {
   return new Date(y, m, 1).getDay();
 }
 function shortFormat(s: string) {
+  if (!isIsoDate(s)) return "—";
   const { y, m, d } = parse(s);
-  return `${d} ${MONTHS[m].slice(0, 3)} ${y}`;
+  const month = MONTHS[m];
+  if (!month) return s;
+  return `${d} ${month.slice(0, 3)} ${y}`;
 }
 function monthStart(s: string) {
   const { y, m } = parse(s);
@@ -90,6 +99,7 @@ export function DateRangePicker({
   max: string;
   onChange: (range: Range) => void;
 }) {
+  const hasBounds = isIsoDate(min) && isIsoDate(max);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Range>(value);
   const [view, setView] = useState(() => viewOf(value.to || max));
@@ -124,6 +134,7 @@ export function DateRangePicker({
   }, [open, value]);
 
   const presets = useMemo(() => {
+    if (!hasBounds) return [];
     // Use wall-clock today for week identity so "Last Week" is not shifted
     // when the dataset's max date still falls in the prior calendar week.
     const now = today();
@@ -145,7 +156,7 @@ export function DateRangePicker({
       { label: "Year to Date", range: boundedRange(currentYearStart, current, min, max) },
       { label: "All Time", range: { from: min, to: max } },
     ];
-  }, [min, max]);
+  }, [hasBounds, min, max]);
 
   const activePreset = presets.find(
     (preset) => preset.range.from === draft.from && preset.range.to === draft.to
@@ -180,7 +191,9 @@ export function DateRangePicker({
     <div className="relative" ref={ref}>
       <button
         type="button"
+        disabled={!hasBounds}
         onClick={() => {
+          if (!hasBounds) return;
           if (open) {
             syncFromValue();
             setOpen(false);
@@ -191,8 +204,9 @@ export function DateRangePicker({
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-disabled={!hasBounds}
         data-open={open}
-        className="lh-dropdown-trigger flex h-8 items-center gap-2 rounded-md border px-2.5 text-[13px]"
+        className="lh-dropdown-trigger flex h-8 items-center gap-2 rounded-md border px-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <CalendarBlankIcon
           size={16}
@@ -201,7 +215,9 @@ export function DateRangePicker({
           className="shrink-0 text-brand"
         />
         <span className="font-medium text-ink">
-          {shortFormat(value.from)} – {shortFormat(value.to)}
+          {hasBounds
+            ? `${shortFormat(value.from)} – ${shortFormat(value.to)}`
+            : "No time entries yet"}
         </span>
         <CaretDownIcon
           size={14}
