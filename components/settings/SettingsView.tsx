@@ -159,15 +159,22 @@ export function SettingsView({
             className="mt-0.5 shrink-0"
           />
           <div>
-            <div className="font-semibold">Settings tables are not readable yet</div>
+            <div className="font-semibold">Settings need the Hub service role key</div>
             <p className="mt-1 text-[color:var(--color-review)]/90">
-              The app connects with the read-only publishable key, and row-level
-              security is blocking the employees / schedules / time-off / holidays
-              tables. Enable access (service-role key or RLS policies) to manage them
-              here. Analytics on Home and People already work.
+              Set <span className="font-medium">SUPABASE_SERVICE_ROLE_KEY</span> on the
+              server (Vercel env + local <span className="font-medium">.env.local</span>)
+              to the Tools Hub project service role—the same project as{" "}
+              <span className="font-medium">SUPABASE_URL</span>. The publishable key
+              cannot read or edit employees, schedules, time off, or holidays because
+              of row-level security.
             </p>
           </div>
         </div>
+      ) : employees.length === 0 ? (
+        <p className="mt-4 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-muted">
+          No people in the directory yet. Add someone under People, or import / migrate
+          time data to sync employees from entries.
+        </p>
       ) : null}
 
       <nav className="mt-5 flex gap-1 border-b border-line" aria-label="Settings sections">

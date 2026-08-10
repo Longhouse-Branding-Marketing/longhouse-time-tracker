@@ -10,6 +10,7 @@ import {
   getTimeOff,
 } from "./data";
 import { memoryCached } from "./memory-cache";
+import { hasSupabaseServiceRole } from "./supabase";
 import type {
   Employee,
   EmployeeSchedule,
@@ -88,7 +89,8 @@ export const getSettingsBundle = unstable_cache(
       schedules,
       timeOff,
       holidays,
-      accessEnabled: employees.length > 0,
+      /** Server must use Hub service_role to read/write RLS-protected base tables. */
+      accessEnabled: hasSupabaseServiceRole(),
     };
   },
   ["settings-bundle"],

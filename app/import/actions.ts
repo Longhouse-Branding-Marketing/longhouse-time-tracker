@@ -53,18 +53,24 @@ function revalidateAfterImport() {
 }
 
 function insertToHashFields(row: TimeEntryInsert): HashFields {
+  const loggedMinutes = Math.round(Number(row.hours) * 60);
   return {
     person: row.person,
-    date: row.date,
+    date: row.date.slice(0, 10),
     department: row.department,
     role: row.role,
     task: row.task,
     type: row.type,
     billable: row.billable,
-    loggedMinutes: Math.round(Number(row.hours) * 60),
+    loggedMinutes,
     comments: row.comments,
     timeRange: row.source_time_range,
   };
+}
+
+/** RPC payload shape — no employee_id (function does not set FK). */
+function stripForRpc(rows: TimeEntryInsert[]): Omit<TimeEntryInsert, "employee_id">[] {
+  return rows.map(({ employee_id: _e, ...row }) => row);
 }
 
 /** Canonicalize insert so entry_hash always matches the hash function. */
@@ -154,6 +160,39 @@ function partitionAgainstExisting(
   return { newRows, skippedRows };
 }
 
+/** Parse CSV and dedupe against DB — shared by preview and commit. */
+async function resolveImportNewRows(
+  csvText: string,
+  sourceFile?: string | null
+): Promise<{
+  parsed: ReturnType<typeof parseMemtimeCsv>;
+  unique: TimeEntryInsert[];
+  newRows: TimeEntryInsert[];
+  intraDuplicates: TimeEntryInsert[];
+  skippedRows: TimeEntryInsert[];
+}> {
+  const employees = await getEmployees();
+  const employeeNames = employees.map((e) => e.person);
+  const parsed = parseMemtimeCsv(csvText, { sourceFile, employeeNames });
+  const inserts = parsed.valid.map((v) => v.insert);
+  const { unique, intraDuplicates } = uniqueByHash(inserts);
+
+  const dateMin = parsed.dateMin ?? "1900-01-01";
+  const dateMax = parsed.dateMax ?? "2100-01-01";
+  const [existing, knownHashes] = await Promise.all([
+    loadExistingInRange(dateMin, dateMax),
+    existingHashSet(unique.map((r) => r.entry_hash)),
+  ]);
+  seedKnownHashes(existing, knownHashes);
+
+  const { newRows, skippedRows } = partitionAgainstExisting(
+    unique,
+    existing,
+    knownHashes
+  );
+  return { parsed, unique, newRows, intraDuplicates, skippedRows };
+}
+
 /**
  * Attach nullable employee_id from the directory by person name.
  * Analytics still join on person text; this seeds stable FKs for future use.
@@ -190,14 +229,17 @@ async function insertIgnoringDuplicates(
     const chunk = rows.slice(i, i + INSERT_BATCH);
 
     const rpc = await supabase.rpc("import_time_entries_ignore_dups", {
-      payload: chunk,
+      payload: stripForRpc(chunk),
     });
 
     if (!rpc.error) {
       const wrote = Number(rpc.data ?? 0);
-      inserted += wrote;
-      skipped += Math.max(0, chunk.length - wrote);
-      continue;
+      if (Number.isFinite(wrote) && wrote > 0) {
+        inserted += wrote;
+        skipped += Math.max(0, chunk.length - wrote);
+        continue;
+      }
+      // RPC returned 0 — fall through to PostgREST insert (broken RPC or all dupes).
     }
 
     // RPC missing / permission — try PostgREST upsert.
@@ -291,47 +333,30 @@ export async function previewImport(
   }
 
   try {
-    const employees = await getEmployees();
-    const employeeNames = employees.map((e) => e.person);
-
-    const parsed = parseMemtimeCsv(csvText, {
+    const parsedOnly = parseMemtimeCsv(csvText, {
       sourceFile,
-      employeeNames,
+      employeeNames: (await getEmployees()).map((e) => e.person),
     });
 
-    if (parsed.valid.length === 0 && parsed.rejected.length > 0) {
+    if (parsedOnly.valid.length === 0 && parsedOnly.rejected.length > 0) {
       return {
         ...empty(
-          parsed.rejected[0]?.rowNumber === 0
-            ? parsed.rejected[0].reason
+          parsedOnly.rejected[0]?.rowNumber === 0
+            ? parsedOnly.rejected[0].reason
             : undefined
         ),
-        ok: parsed.rejected[0]?.rowNumber !== 0,
-        totalRows: parsed.totalRows,
-        rejectedCount: parsed.rejected.length,
-        dateMin: parsed.dateMin,
-        dateMax: parsed.dateMax,
-        totalHours: parsed.totalHours,
-        rejected: parsed.rejected.slice(0, 50),
+        ok: parsedOnly.rejected[0]?.rowNumber !== 0,
+        totalRows: parsedOnly.totalRows,
+        rejectedCount: parsedOnly.rejected.length,
+        dateMin: parsedOnly.dateMin,
+        dateMax: parsedOnly.dateMax,
+        totalHours: parsedOnly.totalHours,
+        rejected: parsedOnly.rejected.slice(0, 50),
       };
     }
 
-    const inserts = parsed.valid.map((v) => v.insert);
-    const { unique, intraDuplicates } = uniqueByHash(inserts);
-
-    const dateMin = parsed.dateMin ?? "1900-01-01";
-    const dateMax = parsed.dateMax ?? "2100-01-01";
-    const [existing, knownHashes] = await Promise.all([
-      loadExistingInRange(dateMin, dateMax),
-      existingHashSet(unique.map((r) => r.entry_hash)),
-    ]);
-    seedKnownHashes(existing, knownHashes);
-
-    const { newRows, skippedRows } = partitionAgainstExisting(
-      unique,
-      existing,
-      knownHashes
-    );
+    const { parsed, unique, newRows, intraDuplicates, skippedRows } =
+      await resolveImportNewRows(csvText, sourceFile);
     const wouldSkipDuplicate = intraDuplicates.length + skippedRows.length;
 
     const allDuplicates: ImportDuplicateRow[] = [
@@ -390,11 +415,12 @@ export async function previewImport(
 
 export async function commitImport(
   accessToken: string | null | undefined,
-  rows: TimeEntryInsert[],
+  csvText: string,
+  sourceFile?: string | null,
   meta?: { rejectedCount?: number; totalRows?: number }
 ): Promise<ImportCommitResult> {
   const rejected = meta?.rejectedCount ?? 0;
-  const processed = meta?.totalRows ?? rows.length;
+  const processed = meta?.totalRows ?? 0;
 
   const denied = await authError(accessToken);
   if (denied) {
@@ -408,9 +434,10 @@ export async function commitImport(
     };
   }
 
-  if (!rows?.length) {
+  if (!csvText?.trim()) {
     return {
-      ok: true,
+      ok: false,
+      error: "CSV text is empty",
       processed,
       inserted: 0,
       skippedDuplicate: 0,
@@ -419,27 +446,26 @@ export async function commitImport(
   }
 
   try {
-    const { unique, intraDuplicates } = uniqueByHash(rows);
-    const dates = unique.map((r) => r.date).sort();
-    const [existing, knownHashes] = await Promise.all([
-      loadExistingInRange(dates[0], dates[dates.length - 1]),
-      existingHashSet(unique.map((r) => r.entry_hash)),
-    ]);
-    seedKnownHashes(existing, knownHashes);
-
-    const { newRows, skippedRows } = partitionAgainstExisting(
-      unique,
-      existing,
-      knownHashes
-    );
+    const { parsed, newRows, intraDuplicates, skippedRows } =
+      await resolveImportNewRows(csvText, sourceFile);
+    const totalRows = meta?.totalRows ?? parsed.totalRows;
     let skippedDuplicate = intraDuplicates.length + skippedRows.length;
+
+    if (newRows.length === 0) {
+      return {
+        ok: true,
+        processed: totalRows,
+        inserted: 0,
+        skippedDuplicate,
+        rejected,
+      };
+    }
 
     const withIds = await withEmployeeIds(newRows);
     const result = await insertIgnoringDuplicates(withIds);
     skippedDuplicate += result.skipped;
 
     if (result.hardError) {
-      // Last line of defense: never show entry_hash unique errors to the user.
       if (isUniqueViolation({ message: result.hardError })) {
         skippedDuplicate += Math.max(
           0,
@@ -449,7 +475,7 @@ export async function commitImport(
         return {
           ok: false,
           error: result.hardError,
-          processed,
+          processed: totalRows,
           inserted: result.inserted,
           skippedDuplicate,
           rejected,
@@ -457,10 +483,22 @@ export async function commitImport(
       }
     }
 
+    if (newRows.length > 0 && result.inserted === 0) {
+      return {
+        ok: false,
+        error:
+          "Import completed but no rows were inserted. Run supabase/migrations/008_fix_import_rpc_role_type.sql in the Hub SQL editor (fixes the import RPC), then try again.",
+        processed: totalRows,
+        inserted: 0,
+        skippedDuplicate,
+        rejected,
+      };
+    }
+
     revalidateAfterImport();
     return {
       ok: true,
-      processed,
+      processed: totalRows,
       inserted: result.inserted,
       skippedDuplicate,
       rejected,
@@ -469,10 +507,12 @@ export async function commitImport(
     const msg = e instanceof Error ? e.message : String(e);
     if (isUniqueViolation({ message: msg })) {
       return {
-        ok: true,
+        ok: false,
+        error:
+          "Rows conflicted with existing entries (entry_hash). Try Repair Duplicates or re-upload after refreshing.",
         processed,
         inserted: 0,
-        skippedDuplicate: rows.length,
+        skippedDuplicate: 0,
         rejected,
       };
     }

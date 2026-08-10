@@ -1,14 +1,5 @@
--- Make entry_hash conflict-safe for PostgREST upsert + app imports.
--- 1) Promote unique INDEX → UNIQUE CONSTRAINT (PostgREST on_conflict is more reliable)
--- 2) RPC that inserts with ON CONFLICT DO NOTHING so duplicates never error
-
-DROP INDEX IF EXISTS public.time_entries_entry_hash_key;
-
-ALTER TABLE public.time_entries
-  DROP CONSTRAINT IF EXISTS time_entries_entry_hash_key;
-
-ALTER TABLE public.time_entries
-  ADD CONSTRAINT time_entries_entry_hash_key UNIQUE (entry_hash);
+-- 004's RPC used unquoted role/type in INSERT column lists (PostgreSQL reserved words).
+-- Re-create with quoted "role" / "type" so imports actually insert rows.
 
 CREATE OR REPLACE FUNCTION public.import_time_entries_ignore_dups(payload jsonb)
 RETURNS bigint

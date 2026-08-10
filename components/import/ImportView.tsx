@@ -82,13 +82,13 @@ export function ImportView() {
   }, [serviceRoleOk, accessToken]);
 
   const runCommit = useCallback(() => {
-    if (!preview?.rows?.length || !accessToken) return;
+    if (!csvText?.trim() || !accessToken) return;
     setImportDupOpen(false);
     setError(null);
     startTransition(async () => {
-      const r = await commitImport(accessToken, preview.rows, {
-        rejectedCount: preview.rejectedCount,
-        totalRows: preview.totalRows,
+      const r = await commitImport(accessToken, csvText, fileName, {
+        rejectedCount: preview?.rejectedCount ?? 0,
+        totalRows: preview?.totalRows ?? 0,
       });
       setResult(r);
       if (!r.ok && r.error) setError(r.error);
@@ -96,16 +96,16 @@ export function ImportView() {
         invalidateApiCache();
       }
     });
-  }, [preview, accessToken]);
+  }, [csvText, fileName, preview, accessToken]);
 
   const onConfirmImport = useCallback(() => {
-    if (!preview?.rows?.length) return;
+    if (!csvText?.trim() || !preview?.ok || preview.wouldInsert === 0) return;
     if (preview.wouldSkipDuplicate > 0) {
       setImportDupOpen(true);
       return;
     }
     runCommit();
-  }, [preview, runCommit]);
+  }, [csvText, preview, runCommit]);
 
   const onPreviewRepair = useCallback(() => {
     if (!accessToken) return;
