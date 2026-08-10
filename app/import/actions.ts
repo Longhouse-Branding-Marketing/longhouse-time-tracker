@@ -224,81 +224,75 @@ async function insertIgnoringDuplicates(
   const supabase = getSupabaseServiceRole();
   let inserted = 0;
   let skipped = 0;
+  let lastError: string | undefined;
+
+  function countInserted(data: { id?: unknown }[] | null, expected: number): number {
+    const n = data?.length ?? 0;
+    // PostgREST sometimes returns 201 with an empty body; treat success as full batch.
+    return n > 0 ? n : expected;
+  }
 
   for (let i = 0; i < rows.length; i += INSERT_BATCH) {
     const chunk = rows.slice(i, i + INSERT_BATCH);
+    const rpcPayload = stripForRpc(chunk);
 
     const rpc = await supabase.rpc("import_time_entries_ignore_dups", {
-      payload: stripForRpc(chunk),
+      payload: rpcPayload,
     });
 
-    if (!rpc.error) {
+    if (rpc.error) {
+      lastError = rpc.error.message;
+    } else {
       const wrote = Number(rpc.data ?? 0);
       if (Number.isFinite(wrote) && wrote > 0) {
         inserted += wrote;
         skipped += Math.max(0, chunk.length - wrote);
         continue;
       }
-      // RPC returned 0 — fall through to PostgREST insert (broken RPC or all dupes).
     }
 
-    // RPC missing / permission — try PostgREST upsert.
-    const upsert = await supabase
+    const batchInsert = await supabase
       .from("time_entries")
-      .upsert(chunk, {
-        onConflict: "entry_hash",
-        ignoreDuplicates: true,
-      })
+      .insert(rpcPayload)
       .select("id");
 
-    if (!upsert.error) {
-      const wrote = upsert.data?.length ?? 0;
-      inserted += wrote;
-      skipped += Math.max(0, chunk.length - wrote);
+    if (!batchInsert.error) {
+      inserted += countInserted(batchInsert.data, chunk.length);
       continue;
     }
 
-    // Batch conflict or on_conflict misconfigured — row-by-row.
+    lastError = batchInsert.error.message;
+
+    if (isUniqueViolation(batchInsert.error)) {
+      skipped += chunk.length;
+      continue;
+    }
+
     for (const row of chunk) {
-      const one = await supabase
-        .from("time_entries")
-        .upsert(row, {
-          onConflict: "entry_hash",
-          ignoreDuplicates: true,
-        })
-        .select("id");
+      const onePayload = stripForRpc([row]);
+      const one = await supabase.from("time_entries").insert(onePayload[0]).select("id");
 
       if (!one.error) {
-        const wrote = one.data?.length ?? 0;
-        if (wrote === 0) skipped += 1;
-        else inserted += wrote;
+        inserted += countInserted(one.data, 1);
         continue;
       }
+
+      lastError = one.error.message;
 
       if (isUniqueViolation(one.error)) {
         skipped += 1;
         continue;
       }
 
-      const plain = await supabase.from("time_entries").insert(row).select("id");
-      if (!plain.error) {
-        inserted += plain.data?.length ?? 1;
-        continue;
-      }
-      if (isUniqueViolation(plain.error)) {
-        skipped += 1;
-        continue;
-      }
       return {
         inserted,
         skipped,
-        hardError:
-          plain.error.message || one.error.message || upsert.error.message,
+        hardError: one.error.message,
       };
     }
   }
 
-  return { inserted, skipped };
+  return { inserted, skipped, hardError: lastError };
 }
 
 export async function previewImport(
@@ -484,10 +478,25 @@ export async function commitImport(
     }
 
     if (newRows.length > 0 && result.inserted === 0) {
+      if (result.skipped >= newRows.length) {
+        revalidateAfterImport();
+        return {
+          ok: true,
+          processed: totalRows,
+          inserted: 0,
+          skippedDuplicate,
+          rejected,
+        };
+      }
+      const detail = result.hardError
+        ? ` Database said: ${result.hardError}`
+        : "";
       return {
         ok: false,
         error:
-          "Import completed but no rows were inserted. Run supabase/migrations/008_fix_import_rpc_role_type.sql in the Hub SQL editor (fixes the import RPC), then try again.",
+          `Import could not insert rows (${newRows.length} expected).` +
+          detail +
+          " Run supabase/migrations/009_entry_hash_unique_constraint.sql in the Hub SQL editor, then try again.",
         processed: totalRows,
         inserted: 0,
         skippedDuplicate,
