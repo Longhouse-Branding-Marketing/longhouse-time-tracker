@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* Longhouse brand tokens — light mode, blue-led, Notion-style restraint. */
+@theme {
+  --color-ink: #02163d; /* darkest navy — primary text */
+  --color-navy: #043566;
+  --color-brand: #08447f; /* Blue 4 — primary brand blue */
+  --color-brand-600: #0898cc; /* Accent 1 */
+  --color-accent-deep: #0d8fbe; /* mid cyan — KPI numbers / chart mid accents */
+  --color-accent: #22bbf2; /* Blue 3 — bright cyan (nav / highlights) */
+  --color-heading: #235c95; /* section / card titles */
+  --color-blue-1: #d5e8f7;
+  --color-tint: #f3f6fa; /* subtle hover / header fill */
+  --color-surface: #f6f8fb; /* page canvas behind cards */
+  --color-page: #ffffff;
+  --color-card: #ffffff;
+  --color-muted: #687787; /* secondary text */
+  --color-line: #e7ebf0; /* hairline borders */
+  --color-positive: #1f9d6b;
+  --color-positive-soft: #eaf6f0;
+  --color-review: #b8860b;
+  --color-review-soft: #f7efda;
+  --color-serious: #c0473f;
+  --color-serious-soft: #f8e9e8;
+  --color-info-soft: #e0f4fb; /* soft cyan tint (not grey-blue) */
+
+  /* Hub tool-auth kit utilities (ToolAuthGate screens) */
+  --color-brand-50: #edf4fa;
+  --color-brand-100: #d5e8f7;
+  --color-brand-200: #c4def4;
+  --color-brand-300: #8ebfe8;
+  --color-brand-700: #08447f;
+  --color-brand-800: #043566;
+  --color-brand-950: #02163d;
+  --color-ink-500: #7a8d9e;
+  --color-ink-600: #5c6773;
+  --color-ink-800: #2e3a47;
+  --color-ink-900: #02163d;
+
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  /* Floating nav docks — reserve left gutter so content clears fixed docks. */
+  --dock-gutter: 5rem; /* ~80px: edge margin + compact dock + breathing room */
+  --z-dock: 40;
+  --z-dock-tooltip: 50;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: normal;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography system — Title Case, normal tracking (never tight / all-caps headings). */
+.lh-page-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: normal;
+  color: var(--color-ink);
+}
+.lh-section-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--color-heading);
+}
+.lh-meta-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: normal;
+  color: var(--color-muted);
+}
+/* Drill-down crumbs + Reset — slightly larger than meta for scanability. */
+.lh-breadcrumb {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: normal;
+  color: var(--color-ink);
+}
+.lh-breadcrumb button {
+  font: inherit;
+}
+
+/* Compact, scannable tables (Notion-style: quiet headers, hairlines). */
+.lh-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.lh-table thead th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-muted);
+  font-size: 12px;
+  letter-spacing: normal;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-line);
+  white-space: nowrap;
+  background: var(--color-page);
+}
+.lh-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+.lh-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.lh-table tbody tr:hover {
+  background-color: var(--color-tint);
+}
+.lh-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.lh-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+
+/* Shared field styling keeps every select trigger and menu consistent. */
+input,
+select {
+  color: var(--color-ink);
+}
+
+.lh-select-trigger {
+  appearance: none;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background-color: var(--color-card);
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6' stroke='%23687787' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 9px center;
+  background-repeat: no-repeat;
+  background-size: 14px;
+  padding-right: 32px;
+  box-shadow: 0 1px 1px rgba(2, 22, 61, 0.02);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease,
+    transform 150ms ease;
+}
+.lh-select-trigger:hover {
+  border-color: #b8c7d6;
+  background-color: var(--color-tint);
+}
+.lh-select-trigger:focus {
+  border-color: var(--color-brand-600);
+  box-shadow: 0 0 0 3px rgba(8, 152, 204, 0.14);
+}
+.lh-select-trigger:active {
+  transform: translateY(1px);
+}
+
+.lh-dropdown-trigger {
+  border-color: var(--color-line);
+  background-color: var(--color-card);
+  box-shadow: 0 1px 1px rgba(2, 22, 61, 0.02);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease,
+    transform 150ms ease;
+}
+.lh-dropdown-trigger:hover {
+  border-color: #b8c7d6;
+  background-color: var(--color-tint);
+}
+.lh-dropdown-trigger[data-open="true"],
+.lh-dropdown-trigger[aria-expanded="true"],
+.lh-dropdown-trigger:focus-visible {
+  border-color: var(--color-accent);
+  background-color: var(--color-page);
+  box-shadow: 0 0 0 3px rgba(34, 187, 242, 0.18);
+  outline: none;
+}
+.lh-dropdown-trigger:active {
+  transform: translateY(1px);
+}
+
+.lh-dropdown-panel {
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-card);
+  box-shadow: 0 12px 32px rgba(2, 22, 61, 0.14), 0 2px 6px rgba(2, 22, 61, 0.05);
+  animation: lh-dropdown-in 150ms ease-out;
+  transform-origin: top left;
+}
+.lh-dropdown-option {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.lh-dropdown-option:hover {
+  background-color: var(--color-tint);
+  color: var(--color-ink);
+}
+.lh-dropdown-input {
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  background-color: var(--color-card);
+  color: var(--color-ink);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.lh-dropdown-input:focus {
+  border-color: var(--color-brand-600);
+  box-shadow: 0 0 0 3px rgba(8, 152, 204, 0.14);
+  outline: none;
+}
+
+@keyframes lh-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-glow {
+  position: absolute;
+  width: 38rem;
+  height: 38rem;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.32;
+  pointer-events: none;
+}
+.login-glow-left {
+  top: 18%;
+  left: -20rem;
+  background: #0f79b0;
+}
+.login-glow-right {
+  right: -18rem;
+  bottom: -22rem;
+  background: #0b4d84;
+}
