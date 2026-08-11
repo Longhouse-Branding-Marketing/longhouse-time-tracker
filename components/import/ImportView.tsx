@@ -9,10 +9,12 @@ import {
 } from "react";
 import { QuestionIcon } from "@phosphor-icons/react";
 import {
-  commitImport,
   getImportSetupStatus,
-  previewImport,
 } from "@/app/import/actions";
+import {
+  commitImportFile,
+  previewImportFile,
+} from "@/lib/import/import-api";
 import {
   applyRepairDuplicates,
   previewRepairDuplicates,
@@ -41,8 +43,7 @@ const REPAIR_RANGE = { from: "2020-01-01", to: "2100-12-31" } as const;
 export function ImportView() {
   const accessToken = useHubAccessToken();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [csvText, setCsvText] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [result, setResult] = useState<ImportCommitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,30 +83,32 @@ export function ImportView() {
   }, [serviceRoleOk, accessToken]);
 
   const runCommit = useCallback(() => {
-    if (!csvText?.trim() || !accessToken) return;
+    if (!selectedFile || !accessToken) return;
     setImportDupOpen(false);
     setError(null);
     startTransition(async () => {
-      const r = await commitImport(accessToken, csvText, fileName, {
-        rejectedCount: preview?.rejectedCount ?? 0,
-        totalRows: preview?.totalRows ?? 0,
-      });
-      setResult(r);
-      if (!r.ok && r.error) setError(r.error);
-      if (r.ok) {
-        invalidateApiCache();
+      try {
+        const r = await commitImportFile(accessToken, selectedFile, {
+          rejectedCount: preview?.rejectedCount ?? 0,
+          totalRows: preview?.totalRows ?? 0,
+        });
+        setResult(r);
+        if (!r.ok && r.error) setError(r.error);
+        if (r.ok) invalidateApiCache();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Import failed");
       }
     });
-  }, [csvText, fileName, preview, accessToken]);
+  }, [selectedFile, preview, accessToken]);
 
   const onConfirmImport = useCallback(() => {
-    if (!csvText?.trim() || !preview?.ok || preview.wouldInsert === 0) return;
+    if (!selectedFile || !preview?.ok || preview.wouldInsert === 0) return;
     if (preview.wouldSkipDuplicate > 0) {
       setImportDupOpen(true);
       return;
     }
     runCommit();
-  }, [csvText, preview, runCommit]);
+  }, [selectedFile, preview, runCommit]);
 
   const onPreviewRepair = useCallback(() => {
     if (!accessToken) return;
@@ -182,8 +185,7 @@ export function ImportView() {
   }, [repairPreview, repairProgress, accessToken]);
 
   const reset = useCallback(() => {
-    setFileName(null);
-    setCsvText(null);
+    setSelectedFile(null);
     setPreview(null);
     setResult(null);
     setError(null);
@@ -197,27 +199,23 @@ export function ImportView() {
     setError(null);
     setImportDupOpen(false);
     if (!file) {
-      setFileName(null);
-      setCsvText(null);
+      setSelectedFile(null);
       return;
     }
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = typeof reader.result === "string" ? reader.result : "";
-      setCsvText(text);
-      if (!accessToken) {
-        setError("Session not ready. Wait a moment and try again.");
-        return;
-      }
-      startTransition(async () => {
-        const p = await previewImport(accessToken, text, file.name);
+    setSelectedFile(file);
+    if (!accessToken) {
+      setError("Session not ready. Wait a moment and try again.");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const p = await previewImportFile(accessToken, file);
         setPreview(p);
         if (!p.ok && p.error) setError(p.error);
-      });
-    };
-    reader.onerror = () => setError("Could not read the selected file.");
-    reader.readAsText(file);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not preview file");
+      }
+    });
   }, [accessToken]);
 
   return (
@@ -298,7 +296,7 @@ export function ImportView() {
                   onChange={(e) => onFile(e.target.files?.[0] ?? null)}
                   disabled={pending}
                 />
-                {fileName ? (
+                {selectedFile ? (
                   <button
                     type="button"
                     onClick={reset}
@@ -313,9 +311,12 @@ export function ImportView() {
                 Upload a Memtime Time Tracking Report CSV. Matching rows already
                 in the system are skipped. Blank task / activity type is fine.
               </p>
-              {fileName ? (
+              {selectedFile ? (
                 <p className="mt-2 truncate text-[12px] font-medium text-ink">
-                  {fileName}
+                  {selectedFile.name}
+                  <span className="ml-2 font-normal tabular-nums text-muted">
+                    ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                  </span>
                 </p>
               ) : null}
             </div>
@@ -452,21 +453,24 @@ export function ImportView() {
                       ? `Review & Import ${preview.wouldInsert} New`
                       : `Import ${preview.wouldInsert} New Row${preview.wouldInsert === 1 ? "" : "s"}`}
               </button>
-              {csvText && !result?.ok ? (
+              {selectedFile && !result?.ok ? (
                 <button
                   type="button"
                   className="text-[13px] font-medium text-muted hover:text-ink"
                   disabled={pending}
                   onClick={() => {
-                    if (!csvText || !fileName) return;
-                    if (!accessToken) {
-                      setError("Session not ready. Wait a moment and try again.");
-                      return;
-                    }
+                    if (!selectedFile || !accessToken) return;
+                    setError(null);
                     startTransition(async () => {
-                      const p = await previewImport(accessToken, csvText, fileName);
-                      setPreview(p);
-                      if (!p.ok && p.error) setError(p.error);
+                      try {
+                        const p = await previewImportFile(accessToken, selectedFile);
+                        setPreview(p);
+                        if (!p.ok && p.error) setError(p.error);
+                      } catch (err) {
+                        setError(
+                          err instanceof Error ? err.message : "Could not re-check file"
+                        );
+                      }
                     });
                   }}
                 >
