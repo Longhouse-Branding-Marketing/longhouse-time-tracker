@@ -198,8 +198,7 @@ async function resolveImportNewRows(
   const { newRows, skippedRows } = partitionAgainstExisting(
     unique,
     existing,
-    knownHashes,
-    { hashOnly: true }
+    knownHashes
   );
   return { parsed, unique, newRows, intraDuplicates, skippedRows };
 }

@@ -9,8 +9,13 @@ import {
   SparkleIcon,
   XIcon,
 } from "@phosphor-icons/react";
+import {
+  RichTextComposer,
+  type RichTextComposerHandle,
+} from "@/components/chat/RichTextComposer";
 import { useDashboardFilters } from "@/lib/dashboard-filters";
 import { useHubAccessToken } from "@/lib/hub/HubSessionContext";
+import { renderChatMarkdown } from "@/lib/richText";
 import type { ChatMessage } from "@/lib/chat/types";
 
 const EXAMPLE_PROMPTS = [
@@ -140,7 +145,7 @@ async function streamChat(
 export function ChatPanel({ onClose }: { onClose: () => void }) {
   const titleId = useId();
   const listRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<RichTextComposerHandle>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -148,7 +153,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const accessToken = useHubAccessToken();
   const [applyDashboardFilters, setApplyDashboardFilters] = useState(isActive);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState(() => takeExamplePrompt());
+  const [canSend, setCanSend] = useState(true);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
@@ -167,8 +172,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setVisible(true));
-    inputRef.current?.focus();
-    inputRef.current?.select();
+    composerRef.current?.focus();
+    composerRef.current?.select();
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -248,12 +253,13 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
     });
   }, [messages, streaming]);
 
-  async function send(text: string) {
-    const content = text.trim();
+  async function send() {
+    const content = composerRef.current?.getMarkdown().trim() ?? "";
     if (!content || streaming) return;
 
     setError(null);
-    setInput("");
+    composerRef.current?.clear();
+    setCanSend(false);
     const nextMessages: ChatMessage[] = [
       ...messages,
       { role: "user", content },
@@ -430,11 +436,14 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                 <div
                   className={`max-w-[92%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-[12.5px] leading-relaxed ${
                     m.role === "user"
-                      ? "bg-brand text-white"
+                      ? "bg-brand text-white [&_em]:text-white/95 [&_strong]:text-white"
                       : "border border-line bg-tint/60 text-ink"
                   }`}
                 >
-                  {m.content ||
+                  {m.role === "user" && m.content ? (
+                    renderChatMarkdown(m.content)
+                  ) : (
+                    m.content ||
                     (streaming && i === messages.length - 1 ? (
                       <span className="inline-flex items-center gap-1.5 text-muted">
                         <CircleNotchIcon
@@ -446,7 +455,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                       </span>
                     ) : (
                       ""
-                    ))}
+                    ))
+                  )}
                 </div>
               </li>
             ))}
@@ -467,28 +477,21 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         className="border-t border-line p-2.5"
         onSubmit={(e) => {
           e.preventDefault();
-          void send(input);
+          void send();
         }}
       >
         <div className="flex items-end gap-1.5 rounded-xl border border-line bg-page px-2 py-1.5 focus-within:border-brand-600/40">
-          <textarea
-            ref={inputRef}
-            rows={3}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send(input);
-              }
-            }}
+          <RichTextComposer
+            ref={composerRef}
+            initialValue={takeExamplePrompt()}
             placeholder="Ask about the data…"
             disabled={streaming}
-            className="max-h-28 min-h-[64px] flex-1 resize-none bg-transparent px-1 py-1.5 text-[12.5px] text-ink outline-none placeholder:text-muted disabled:opacity-60"
+            onValueChange={(markdown) => setCanSend(Boolean(markdown.trim()))}
+            onSubmit={() => void send()}
           />
           <button
             type="submit"
-            disabled={streaming || !input.trim()}
+            disabled={streaming || !canSend}
             aria-label="Send"
             className="mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >

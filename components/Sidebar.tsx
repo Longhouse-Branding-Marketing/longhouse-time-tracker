@@ -15,7 +15,11 @@ import {
 } from "@phosphor-icons/react";
 import { refreshTimeTrackingData } from "@/app/actions";
 import { invalidateApiCache } from "@/lib/api";
-import { useHubAccessToken } from "@/lib/hub/HubSessionContext";
+import { useHubAccessToken, useHubSession } from "@/lib/hub/HubSessionContext";
+import {
+  sessionUserDisplayName,
+  sessionUserPhotoUrl,
+} from "@/lib/hub/sessionUser";
 import { AskAiButton } from "@/components/chat/AskAiButton";
 import { Avatar } from "@/components/ui";
 
@@ -77,6 +81,10 @@ function DockCard({
 }
 
 function UserMenu() {
+  const { session } = useHubSession();
+  const user = session?.user ?? null;
+  const displayName = sessionUserDisplayName(user);
+  const photoUrl = sessionUserPhotoUrl(user);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -114,7 +122,7 @@ function UserMenu() {
           open ? "bg-tint" : "hover:bg-tint/80"
         }`}
       >
-        <Avatar name="Longhouse" size="sm" />
+        <Avatar name={displayName} photoUrl={photoUrl} size="sm" />
         {!open ? <DockTooltip label="Account" /> : null}
       </button>
 

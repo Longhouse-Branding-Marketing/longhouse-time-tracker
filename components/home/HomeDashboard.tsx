@@ -32,6 +32,11 @@ import {
   isDefault,
   type Filters,
 } from "@/lib/filtering";
+import {
+  initialDashboardFilters,
+  reconcileStoredFilters,
+  saveStoredFilters,
+} from "@/lib/filterStorage";
 import { hours, n, pct } from "@/lib/formatters";
 import {
   KPI_EXCLUDED_STATUS,
@@ -91,12 +96,26 @@ export function HomeDashboard({
 
   const bounds = useMemo(() => dateBounds(activeEntries), [activeEntries]);
   const options = useMemo(() => extractOptions(activeEntries), [activeEntries]);
-  const [filters, setFilters] = useState<Filters>(() => defaultFilters(bounds));
+  const [filters, setFilters] = useState<Filters>(() =>
+    initialDashboardFilters(bounds, options)
+  );
+  const [filtersReady, setFiltersReady] = useState(false);
   const [drillStack, setDrillStack] = useState<DrillScope[]>([]);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [dayDetailOpen, setDayDetailOpen] = useState(false);
   const { setSnapshot, clearSnapshot } = useDashboardFilters();
+
+  useEffect(() => {
+    if (!bounds.min) return;
+    setFilters((current) => reconcileStoredFilters(current, bounds, options));
+    setFiltersReady(true);
+  }, [bounds.min, bounds.max, options]);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    saveStoredFilters(filters);
+  }, [filters, filtersReady]);
 
   useEffect(() => {
     setSnapshot({
@@ -290,7 +309,9 @@ export function HomeDashboard({
           bounds={bounds}
           onChange={update}
           onClear={() => {
-            setFilters(defaultFilters(bounds));
+            const cleared = defaultFilters(bounds);
+            setFilters(cleared);
+            saveStoredFilters(cleared);
             setDrillStack([]);
             setSelectedDay(null);
             setSelectedHour(null);
