@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ArrowsClockwiseIcon,
+  BugIcon,
   ClockIcon,
   GearSixIcon,
   LightbulbIcon,
@@ -20,6 +21,11 @@ import {
   sessionUserDisplayName,
   sessionUserPhotoUrl,
 } from "@/lib/hub/sessionUser";
+import {
+  toolsHubBugReportUrl,
+  toolsHubFeatureRequestUrl,
+  toolsHubHomeUrl,
+} from "@/lib/hub/toolsLinks";
 import { AskAiButton } from "@/components/chat/AskAiButton";
 import { Avatar } from "@/components/ui";
 
@@ -35,13 +41,19 @@ const USER_MENU_LINKS = [
   { label: "Import", href: "/import", Icon: UploadSimpleIcon },
   {
     label: "Request a Feature",
-    href: "https://www.longhouse.co/contact/",
+    href: toolsHubFeatureRequestUrl(),
     external: true,
     Icon: LightbulbIcon,
   },
   {
+    label: "Report a Bug",
+    href: toolsHubBugReportUrl(),
+    external: true,
+    Icon: BugIcon,
+  },
+  {
     label: "Longhouse Tools",
-    href: "https://www.longhouse.co/",
+    href: toolsHubHomeUrl(),
     external: true,
     Icon: WrenchIcon,
   },

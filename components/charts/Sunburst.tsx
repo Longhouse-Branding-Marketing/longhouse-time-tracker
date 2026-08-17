@@ -135,6 +135,8 @@ export function Sunburst({
   const displayRef = useRef(display);
   displayRef.current = display;
   const animRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const [listMaxHeight, setListMaxHeight] = useState<number | null>(null);
   const radius = size / 2;
   const holeR = radius * 0.22;
 
@@ -186,7 +188,19 @@ export function Sunburst({
   useEffect(() => {
     setFocusKey(null);
     setDisplay(buildDisplay(chart.root, chart.root, radius, holeR));
+    setListMaxHeight(null);
   }, [chart, radius, holeR]);
+
+  // Lock side-panel list height to the department-level size
+  useEffect(() => {
+    if (focus.depth !== 0 || listMaxHeight != null) return;
+    const el = listRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => {
+      if (el.scrollHeight > 0) setListMaxHeight(el.scrollHeight);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focus.depth, panelItems.length, listMaxHeight]);
 
   const focus = focusKey ? (chart.byKey.get(focusKey) ?? chart.root) : chart.root;
 
@@ -436,7 +450,11 @@ export function Sunburst({
 
         <h3 className="lh-section-title">{panelLabel}</h3>
 
-        <ul className="mt-3 space-y-1">
+        <ul
+          ref={listRef}
+          className="mt-3 space-y-1 overflow-y-auto"
+          style={listMaxHeight != null ? { maxHeight: listMaxHeight } : undefined}
+        >
           {panelItems.map((item) => {
             const share =
               panelTotal > 0 ? Math.round((100 * item.hours) / panelTotal) : 0;
