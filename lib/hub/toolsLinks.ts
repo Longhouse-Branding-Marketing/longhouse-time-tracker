@@ -2,18 +2,29 @@ import { getClientHubAuthConfig, getToolSlug } from "./env";
 
 const PRODUCTION_TOOLS_HUB = "https://tools.longhouse.co";
 
-/** Origin for links back to the Tools Hub (defaults to production). */
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function isLocalHubUrl(url: string | undefined): boolean {
+  if (!url) return true;
+  return isLocalHost(new URL(url).hostname);
+}
+
+/** Origin for profile links back to the Tools Hub. */
 export function getToolsHubOrigin(): string {
   const fromEnv = getClientHubAuthConfig().hubUrl?.trim().replace(/\/$/, "");
-  if (fromEnv && !fromEnv.includes("localhost")) return fromEnv;
-  if (
-    typeof window !== "undefined" &&
-    window.location.hostname !== "localhost" &&
-    window.location.hostname !== "127.0.0.1"
-  ) {
-    return PRODUCTION_TOOLS_HUB;
+
+  const onLocalApp =
+    typeof window !== "undefined"
+      ? isLocalHost(window.location.hostname)
+      : process.env.NODE_ENV === "development" && isLocalHubUrl(fromEnv);
+
+  if (onLocalApp && fromEnv && isLocalHubUrl(fromEnv)) {
+    return fromEnv;
   }
-  return fromEnv || PRODUCTION_TOOLS_HUB;
+
+  return PRODUCTION_TOOLS_HUB;
 }
 
 function hubUrl(params?: Record<string, string>): string {

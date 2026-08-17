@@ -37,28 +37,48 @@ const NAV = [
 
 const MENU_ICON = 16;
 
-const USER_MENU_LINKS = [
+type UserMenuLink =
+  | { label: string; href: string; Icon: typeof UploadSimpleIcon }
+  | {
+      label: string;
+      hub: "feature" | "bug" | "home";
+      external: true;
+      Icon: typeof LightbulbIcon;
+    };
+
+const USER_MENU_LINKS: UserMenuLink[] = [
   { label: "Import", href: "/import", Icon: UploadSimpleIcon },
   {
     label: "Request a Feature",
-    href: toolsHubFeatureRequestUrl(),
+    hub: "feature",
     external: true,
     Icon: LightbulbIcon,
   },
   {
     label: "Report a Bug",
-    href: toolsHubBugReportUrl(),
+    hub: "bug",
     external: true,
     Icon: BugIcon,
   },
   {
     label: "Longhouse Tools",
-    href: toolsHubHomeUrl(),
+    hub: "home",
     external: true,
     Icon: WrenchIcon,
   },
   { label: "Sign Out", href: "#sign-out", Icon: SignOutIcon },
-] as const;
+];
+
+function hubMenuHref(hub: "feature" | "bug" | "home"): string {
+  switch (hub) {
+    case "feature":
+      return toolsHubFeatureRequestUrl();
+    case "bug":
+      return toolsHubBugReportUrl();
+    case "home":
+      return toolsHubHomeUrl();
+  }
+}
 
 const DOCK_ICON = 20;
 
@@ -145,7 +165,9 @@ function UserMenu() {
           className="absolute bottom-0 left-[calc(100%+10px)] z-[var(--z-dock-tooltip)] w-[12.5rem] rounded-xl border border-line bg-card p-1 shadow-[0_8px_28px_rgba(2,22,61,0.12),0_1px_3px_rgba(2,22,61,0.04)]"
         >
           {USER_MENU_LINKS.map((item) => {
-            const { label, href, Icon } = item;
+            const { label, Icon } = item;
+            const href =
+              "hub" in item ? hubMenuHref(item.hub) : item.href;
             const external = "external" in item && item.external;
             const className =
               "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium text-ink transition-colors hover:bg-tint";
