@@ -191,17 +191,6 @@ export function Sunburst({
     setListMaxHeight(null);
   }, [chart, radius, holeR]);
 
-  // Lock side-panel list height to the department-level size
-  useEffect(() => {
-    if (focus.depth !== 0 || listMaxHeight != null) return;
-    const el = listRef.current;
-    if (!el) return;
-    const frame = requestAnimationFrame(() => {
-      if (el.scrollHeight > 0) setListMaxHeight(el.scrollHeight);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [focus.depth, panelItems.length, listMaxHeight]);
-
   const focus = focusKey ? (chart.byKey.get(focusKey) ?? chart.root) : chart.root;
 
   function animateTo(nextFocus: Node) {
@@ -286,6 +275,17 @@ export function Sunburst({
       }))
       .sort((a, b) => b.hours - a.hours);
   }, [focus, chart.departments, chart.colorOf]);
+
+  // Lock side-panel list height to the department-level size
+  useEffect(() => {
+    if (focus.depth !== 0 || listMaxHeight != null) return;
+    const el = listRef.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(() => {
+      if (el.scrollHeight > 0) setListMaxHeight(el.scrollHeight);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focus.depth, panelItems.length, listMaxHeight]);
 
   const panelLabel =
     focus.depth === 0
