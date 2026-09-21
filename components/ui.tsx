@@ -131,9 +131,9 @@ export function StatCard({
 }
 
 const AVATAR_SIZES = {
-  sm: "h-7 w-7 text-[11px]",
-  md: "h-9 w-9 text-xs",
-  lg: "h-14 w-14 text-base",
+  sm: "h-7 w-7 text-[11px] rounded-md",
+  md: "h-9 w-9 text-xs rounded-md",
+  lg: "h-14 w-14 text-base rounded-lg",
 } as const;
 
 export function Avatar({
@@ -152,13 +152,13 @@ export function Avatar({
       <img
         src={photoUrl}
         alt={name}
-        className={`${cls} shrink-0 rounded-full object-cover ring-1 ring-line`}
+        className={`${cls} shrink-0 object-cover ring-1 ring-line`}
       />
     );
   }
   return (
     <span
-      className={`${cls} flex shrink-0 items-center justify-center rounded-full bg-blue-1 font-semibold text-brand ring-1 ring-line`}
+      className={`${cls} flex shrink-0 items-center justify-center bg-blue-1 font-semibold text-brand ring-1 ring-line`}
       aria-hidden
     >
       {initials(name)}

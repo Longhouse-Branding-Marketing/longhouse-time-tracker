@@ -52,3 +52,13 @@ export function isHubAuthConfigured(): boolean {
     c.supabaseUrl && c.supabaseAnonKey && c.toolSlug && c.hubUrl
   );
 }
+
+/**
+ * Local `next dev` only. Production builds always require Google / Hub auth.
+ * Token is a client sentinel so existing `if (!accessToken)` waits still resolve.
+ */
+export const DEV_HUB_BYPASS_TOKEN = "dev-bypass";
+
+export function isHubAuthBypassed(): boolean {
+  return process.env.NODE_ENV === "development";
+}

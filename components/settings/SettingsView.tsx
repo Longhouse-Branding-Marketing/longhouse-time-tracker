@@ -34,7 +34,13 @@ function employeeIdFromParams(
     if (Number.isFinite(id) && employees.some((e) => e.id === id)) return id;
   }
   if (personParam) {
-    const match = employees.find((e) => e.person === personParam);
+    const needle = personParam.trim().toLowerCase();
+    const match = employees.find((e) => {
+      if (e.person.trim().toLowerCase() === needle) return true;
+      return (e.also_known_as ?? []).some(
+        (alias) => alias.trim().toLowerCase() === needle
+      );
+    });
     if (match) return match.id;
   }
   return null;
@@ -215,38 +221,41 @@ export function SettingsView({
               noBodyPadding
             >
               <div className="lh-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain">
-                <div className="px-2 pt-2 pb-6">
-                  {employees.map((employee) => (
-                    <button
-                      key={employee.id}
-                      type="button"
-                      onClick={() => {
-                        setAddingEmployee(false);
-                        setSelectedEmployeeId(employee.id);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                        selectedEmployee?.id === employee.id && !addingEmployee
-                          ? "bg-blue-1/65"
-                          : "hover:bg-tint"
-                      }`}
-                    >
-                      <Avatar name={employee.person} photoUrl={employee.photo_url} size="md" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-ink">
+                <div className="px-1.5 py-1.5">
+                  {employees.map((employee) => {
+                    const selected =
+                      selectedEmployee?.id === employee.id && !addingEmployee;
+                    return (
+                      <button
+                        key={employee.id}
+                        type="button"
+                        onClick={() => {
+                          setAddingEmployee(false);
+                          setSelectedEmployeeId(employee.id);
+                        }}
+                        aria-current={selected ? "true" : undefined}
+                        aria-label={`${employee.person}, ${employee.active ? "Active" : "Inactive"}`}
+                        className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors ${
+                          selected ? "bg-blue-1/65" : "hover:bg-tint"
+                        }`}
+                      >
+                        <Avatar
+                          name={employee.person}
+                          photoUrl={employee.photo_url}
+                          size="sm"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
                           {employee.person}
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-muted">
-                          {employee.active ? "Active" : "Inactive"}
-                        </span>
-                      </span>
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
-                          employee.active ? "bg-positive" : "bg-line"
-                        }`}
-                        aria-label={employee.active ? "Active" : "Inactive"}
-                      />
-                    </button>
-                  ))}
+                        <span
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                            employee.active ? "bg-positive" : "bg-line"
+                          }`}
+                          aria-hidden
+                        />
+                      </button>
+                    );
+                  })}
                   {employees.length === 0 ? <EmptyRow>No people yet.</EmptyRow> : null}
                 </div>
               </div>

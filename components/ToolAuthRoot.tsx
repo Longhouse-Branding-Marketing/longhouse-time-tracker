@@ -3,7 +3,11 @@
 import type { ReactNode } from "react";
 import ToolAuthGate from "@/integrations/tool-auth/react/ToolAuthGate.jsx";
 import { HubSessionProvider } from "@/lib/hub/HubSessionContext";
-import { getClientHubAuthConfig, isHubAuthConfigured } from "@/lib/hub/env";
+import {
+  getClientHubAuthConfig,
+  isHubAuthBypassed,
+  isHubAuthConfigured,
+} from "@/lib/hub/env";
 
 function ConfigError({ message }: { message: string }) {
   return (
@@ -15,6 +19,10 @@ function ConfigError({ message }: { message: string }) {
 
 export function ToolAuthRoot({ children }: { children: ReactNode }) {
   const config = getClientHubAuthConfig();
+
+  if (isHubAuthBypassed()) {
+    return <HubSessionProvider>{children}</HubSessionProvider>;
+  }
 
   if (!isHubAuthConfigured()) {
     return (

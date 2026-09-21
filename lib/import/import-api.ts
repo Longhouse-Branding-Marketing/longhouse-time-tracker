@@ -1,7 +1,9 @@
 import type {
   ImportCommitResult,
   ImportPreviewResult,
+  ImportProgressEvent,
 } from "@/lib/import/import-action-types";
+import { readImportCommitStream } from "@/lib/import/import-stream";
 
 async function postImportForm<T>(
   path: string,
@@ -41,18 +43,40 @@ export function previewImportFile(
   return postImportForm<ImportPreviewResult>("/api/import/preview", accessToken, file);
 }
 
-export function commitImportFile(
+export async function commitImportFile(
   accessToken: string,
   file: File,
-  meta: { rejectedCount?: number; totalRows?: number }
+  meta: { rejectedCount?: number; totalRows?: number },
+  onProgress?: (event: ImportProgressEvent) => void
 ): Promise<ImportCommitResult> {
-  const fields: Record<string, string | number> = {};
-  if (meta.rejectedCount != null) fields.rejectedCount = meta.rejectedCount;
-  if (meta.totalRows != null) fields.totalRows = meta.totalRows;
-  return postImportForm<ImportCommitResult>(
-    "/api/import/commit",
-    accessToken,
-    file,
-    fields
-  );
+  const form = new FormData();
+  form.append("file", file, file.name);
+  if (meta.rejectedCount != null) form.append("rejectedCount", String(meta.rejectedCount));
+  if (meta.totalRows != null) form.append("totalRows", String(meta.totalRows));
+
+  const res = await fetch("/api/import/commit", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+
+  const contentType = res.headers.get("content-type") ?? "";
+  if (contentType.includes("text/event-stream") && res.body) {
+    if (!res.ok) {
+      throw new Error(`Request failed (${res.status})`);
+    }
+    return readImportCommitStream(res, onProgress);
+  }
+
+  const body = (await res.json().catch(() => ({}))) as ImportCommitResult & {
+    error?: string;
+  };
+  if (!res.ok) {
+    const message =
+      typeof body.error === "string"
+        ? body.error
+        : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return body;
 }

@@ -1,5 +1,14 @@
 import { employeeKey, entryHash } from "./hash";
 import { cellAt, parseCsv } from "./parseCsv";
+import {
+  resolveEmployeeName,
+  type DirectoryPerson,
+} from "./resolvePerson";
+
+export {
+  resolveEmployeeName,
+  type DirectoryPerson,
+} from "./resolvePerson";
 
 /** Physical insert shape for public.time_entries */
 export type TimeEntryInsert = {
@@ -30,6 +39,8 @@ export type RejectedRow = {
 export type ValidatedImportRow = {
   rowNumber: number;
   insert: TimeEntryInsert;
+  /** Raw Memtime User, before directory resolution. */
+  sourceUser: string;
   /** Preview-only (not inserted). */
   employeeKey: string;
   dayOfWeek: string;
@@ -234,45 +245,11 @@ function dayOfWeek(isoDate: string): string {
   return DOW[d.getUTCDay()] ?? "";
 }
 
-/**
- * Map Memtime "User" onto employees.person when possible.
- * There is no email/employee_key column — match display names (and simple
- * email-local / first-token fallbacks against the directory).
- */
-export function resolveEmployeeName(
-  userRaw: string,
-  employeeNames: string[]
-): string {
-  const user = userRaw.trim();
-  if (!user) return user;
-
-  const byLower = new Map(
-    employeeNames.map((p) => [p.trim().toLowerCase(), p.trim()] as const)
-  );
-  const exact = byLower.get(user.toLowerCase());
-  if (exact) return exact;
-
-  if (user.includes("@")) {
-    const local = user.split("@")[0]?.toLowerCase() ?? "";
-    for (const [key, person] of byLower) {
-      const slug = key.replace(/[^a-z0-9]/g, "");
-      const localSlug = local.replace(/[^a-z0-9]/g, "");
-      if (localSlug && (slug === localSlug || slug.startsWith(localSlug))) {
-        return person;
-      }
-    }
-  }
-
-  // "Harry Smith" → Harry when directory uses first names
-  const first = user.split(/\s+/)[0]?.toLowerCase();
-  if (first && byLower.has(first)) return byLower.get(first)!;
-
-  return user;
-}
-
 export type ParseMemtimeOptions = {
   sourceFile?: string | null;
-  /** employees.person values for User → display name resolution */
+  /** Preferred names + aliases from Settings. */
+  employeeDirectory?: DirectoryPerson[];
+  /** @deprecated Prefer employeeDirectory. */
   employeeNames?: string[];
 };
 
@@ -288,7 +265,9 @@ export function parseMemtimeCsv(
       ? { sourceFile: options }
       : options;
   const sourceFile = opts.sourceFile ?? null;
-  const employeeNames = opts.employeeNames ?? [];
+  const employeeDirectory: DirectoryPerson[] =
+    opts.employeeDirectory ??
+    (opts.employeeNames ?? []).map((person) => ({ person }));
 
   const { headers, rows } = parseCsv(csvText);
   if (headers.length === 0) {
@@ -341,7 +320,7 @@ export function parseMemtimeCsv(
       rejected.push({ rowNumber, reason: "Missing User" });
       return;
     }
-    const person = resolveEmployeeName(userRaw, employeeNames);
+    const person = resolveEmployeeName(userRaw, employeeDirectory);
 
     const date = parseDate(dateRaw);
     if (!date) {
@@ -393,6 +372,7 @@ export function parseMemtimeCsv(
     valid.push({
       rowNumber,
       insert,
+      sourceUser: userRaw.trim(),
       employeeKey: employeeKey(person),
       dayOfWeek: dayOfWeek(date),
       yearMonth: date.slice(0, 7),

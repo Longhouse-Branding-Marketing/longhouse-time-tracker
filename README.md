@@ -71,8 +71,8 @@ compared.
 
 ## Security model
 
-- **Tools Hub auth:** The app wraps all routes in `ToolAuthGate` (slug `time-tracking`). Users sign in with Google on this origin; access is checked via `user_can_access_tool_by_slug` on the **Tools Hub Supabase** project.
-- **API enforcement:** All `/api/*` routes and server actions require a valid Supabase JWT (`Authorization: Bearer …`) and tool access — not just the UI gate.
+- **Tools Hub auth:** Production wraps all routes in `ToolAuthGate` (slug `time-tracking`). Users sign in with Google on this origin; access is checked via `user_can_access_tool_by_slug` on the **Tools Hub Supabase** project. `npm run dev` (`NODE_ENV=development`) skips that Google/Hub gate so localhost can load without sign-in. Production builds still require it.
+- **API enforcement:** All `/api/*` routes and server actions require a valid Supabase JWT (`Authorization: Bearer …`) and tool access — not just the UI gate. Local `next dev` skips that JWT check as well.
 - **Data:** Time-tracking tables and views live in the **same Supabase project as Tools Hub**. Server reads/writes use the **service_role** key after the JWT gate; RLS limits direct `authenticated` access to users with tool access.
 - Register the tool in Hub **Manage Tools**, assign users in **Manage Access**, and add this app’s URL to Supabase **Redirect URLs** and Google **Authorized JavaScript origins** (`http://localhost:3007` for local dev). See [TOOL_INTEGRATION.md](https://github.com/longhouse/Longhouse-Tools/blob/main/docs/TOOL_INTEGRATION.md) in the hub repo.
 

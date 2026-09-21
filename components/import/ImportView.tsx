@@ -10,7 +10,7 @@ import {
 import { QuestionIcon } from "@phosphor-icons/react";
 import {
   getImportSetupStatus,
-} from "@/app/import/actions";
+} from "@/app/import/setup-status";
 import {
   commitImportFile,
   previewImportFile,
@@ -33,12 +33,33 @@ import {
   ImportDuplicatesModal,
 } from "@/components/import/ImportModals";
 import {
+  ImportCompletePanel,
+  ImportRunningPanel,
+} from "@/components/import/ImportProgressPanel";
+import {
   RepairDuplicatesModal,
   type RepairProgress,
 } from "@/components/import/RepairDuplicatesModal";
 import { PageShell, Panel } from "@/components/ui";
+import type { ImportProgressEvent } from "@/lib/import/import-action-types";
+import {
+  IMPORT_NOTIFY_AFTER_MS,
+} from "@/lib/import/import-stream";
+import {
+  notifyImportComplete,
+  requestImportNotificationPermission,
+} from "@/lib/import/notifyImport";
 
 const REPAIR_RANGE = { from: "2020-01-01", to: "2100-12-31" } as const;
+
+type ImportJob =
+  | { kind: "idle" }
+  | { kind: "preview"; startedAt: number }
+  | {
+      kind: "commit";
+      startedAt: number;
+      progress: ImportProgressEvent | null;
+    };
 
 export function ImportView() {
   const accessToken = useHubAccessToken();
@@ -58,6 +79,26 @@ export function ImportView() {
   );
   const [howToOpen, setHowToOpen] = useState(false);
   const [duplicateCount, setDuplicateCount] = useState<number | null>(null);
+  const [importJob, setImportJob] = useState<ImportJob>({ kind: "idle" });
+  const [completeElapsedMs, setCompleteElapsedMs] = useState<number | null>(
+    null
+  );
+  const [now, setNow] = useState(() => Date.now());
+  const aliveRef = useRef(true);
+  const importBusy = importJob.kind !== "idle";
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (importJob.kind === "idle") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [importJob.kind]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -84,25 +125,64 @@ export function ImportView() {
 
   const runCommit = useCallback(() => {
     if (!selectedFile || !accessToken) return;
+    requestImportNotificationPermission();
     setImportDupOpen(false);
     setError(null);
-    startTransition(async () => {
+    setResult(null);
+    const startedAt = Date.now();
+    setNow(startedAt);
+    setImportJob({
+      kind: "commit",
+      startedAt,
+      progress: {
+        phase: "matching",
+        done: 0,
+        total: Math.max(1, preview?.wouldInsert ?? 1),
+        label: "Starting Import…",
+      },
+    });
+
+    void (async () => {
       try {
-        const r = await commitImportFile(accessToken, selectedFile, {
-          rejectedCount: preview?.rejectedCount ?? 0,
-          totalRows: preview?.totalRows ?? 0,
-        });
+        const r = await commitImportFile(
+          accessToken,
+          selectedFile,
+          {
+            rejectedCount: preview?.rejectedCount ?? 0,
+            totalRows: preview?.totalRows ?? 0,
+          },
+          (progress) => {
+            if (!aliveRef.current) return;
+            setImportJob((prev) =>
+              prev.kind === "commit" ? { ...prev, progress } : prev
+            );
+          }
+        );
+        const elapsed = Date.now() - startedAt;
+        if (r.ok && elapsed >= IMPORT_NOTIFY_AFTER_MS) {
+          notifyImportComplete({
+            fileName: selectedFile.name,
+            inserted: r.inserted,
+            elapsedMs: elapsed,
+          });
+        }
+        if (!aliveRef.current) return;
         setResult(r);
+        setCompleteElapsedMs(elapsed);
+        setImportJob({ kind: "idle" });
         if (!r.ok && r.error) setError(r.error);
         if (r.ok) invalidateApiCache();
       } catch (err) {
+        if (!aliveRef.current) return;
+        setImportJob({ kind: "idle" });
         setError(err instanceof Error ? err.message : "Import failed");
       }
-    });
+    })();
   }, [selectedFile, preview, accessToken]);
 
   const onConfirmImport = useCallback(() => {
     if (!selectedFile || !preview?.ok || preview.wouldInsert === 0) return;
+    requestImportNotificationPermission();
     if (preview.wouldSkipDuplicate > 0) {
       setImportDupOpen(true);
       return;
@@ -190,6 +270,8 @@ export function ImportView() {
     setResult(null);
     setError(null);
     setImportDupOpen(false);
+    setImportJob({ kind: "idle" });
+    setCompleteElapsedMs(null);
     if (inputRef.current) inputRef.current.value = "";
   }, []);
 
@@ -198,8 +280,10 @@ export function ImportView() {
     setPreview(null);
     setError(null);
     setImportDupOpen(false);
+    setCompleteElapsedMs(null);
     if (!file) {
       setSelectedFile(null);
+      setImportJob({ kind: "idle" });
       return;
     }
     setSelectedFile(file);
@@ -207,13 +291,20 @@ export function ImportView() {
       setError("Session not ready. Wait a moment and try again.");
       return;
     }
+    const startedAt = Date.now();
+    setNow(startedAt);
+    setImportJob({ kind: "preview", startedAt });
     startTransition(async () => {
       try {
         const p = await previewImportFile(accessToken, file);
+        if (!aliveRef.current) return;
         setPreview(p);
         if (!p.ok && p.error) setError(p.error);
       } catch (err) {
+        if (!aliveRef.current) return;
         setError(err instanceof Error ? err.message : "Could not preview file");
+      } finally {
+        if (aliveRef.current) setImportJob({ kind: "idle" });
       }
     });
   }, [accessToken]);
@@ -245,13 +336,16 @@ export function ImportView() {
               onClick={onPreviewRepair}
               disabled={
                 pending ||
+                importBusy ||
                 !!repairPreview ||
                 !!repairProgress ||
                 duplicateCount === null
               }
               className="rounded-md border border-line bg-card px-3 py-1.5 text-[13px] font-medium text-brand-600 shadow-[0_1px_2px_rgba(2,22,61,0.04)] transition hover:border-brand/30 hover:bg-tint disabled:opacity-40"
             >
-              {pending && !repairPreview ? "Scanning…" : "Review Duplicates"}
+              {pending && !repairPreview && !importBusy
+                ? "Scanning…"
+                : "Review Duplicates"}
             </button>
           </div>
         ) : null}
@@ -294,14 +388,14 @@ export function ImportView() {
                   accept=".csv,text/csv"
                   className="block w-full max-w-md text-[13px] text-ink file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-[13px] file:font-medium file:text-white hover:file:bg-brand-600"
                   onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-                  disabled={pending}
+                  disabled={pending || importBusy}
                 />
                 {selectedFile ? (
                   <button
                     type="button"
                     onClick={reset}
                     className="text-[13px] font-medium text-brand-600 hover:underline"
-                    disabled={pending}
+                    disabled={pending || importBusy}
                   >
                     Clear File
                   </button>
@@ -329,11 +423,23 @@ export function ImportView() {
           </div>
         ) : null}
 
-        {pending && !preview && !repairPreview ? (
-          <p className="text-[13px] text-muted">Checking File…</p>
+        {result?.ok ? (
+          <ImportCompletePanel
+            result={result}
+            elapsedMs={completeElapsedMs}
+            onReset={reset}
+          />
         ) : null}
 
-        {preview && preview.ok ? (
+        {importJob.kind !== "idle" ? (
+          <ImportRunningPanel
+            kind={importJob.kind === "preview" ? "preview" : "commit"}
+            progress={importJob.kind === "commit" ? importJob.progress : null}
+            elapsedMs={Math.max(0, now - importJob.startedAt)}
+          />
+        ) : null}
+
+        {preview && preview.ok && !result?.ok ? (
           <Panel title="Preview">
             <p className="mb-4 text-[12px] leading-snug text-muted">
               Import reads and writes project{" "}
@@ -383,7 +489,7 @@ export function ImportView() {
                 <button
                   type="button"
                   className="font-medium text-brand-600 hover:underline"
-                  disabled={pending}
+                  disabled={pending || importBusy}
                   onClick={() => setImportDupOpen(true)}
                 >
                   Review {preview.wouldSkipDuplicate.toLocaleString()}{" "}
@@ -439,13 +545,14 @@ export function ImportView() {
                 onClick={onConfirmImport}
                 disabled={
                   pending ||
+                  importBusy ||
                   preview.wouldInsert === 0 ||
                   !!result?.ok ||
                   serviceRoleOk === false
                 }
                 className="rounded-md bg-brand px-4 py-2 text-[13px] font-medium text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {pending
+                {importJob.kind === "commit"
                   ? "Importing…"
                   : preview.wouldInsert === 0
                     ? "Nothing To Import"
@@ -457,19 +564,26 @@ export function ImportView() {
                 <button
                   type="button"
                   className="text-[13px] font-medium text-muted hover:text-ink"
-                  disabled={pending}
+                  disabled={pending || importBusy}
                   onClick={() => {
                     if (!selectedFile || !accessToken) return;
                     setError(null);
+                    const startedAt = Date.now();
+                    setNow(startedAt);
+                    setImportJob({ kind: "preview", startedAt });
                     startTransition(async () => {
                       try {
                         const p = await previewImportFile(accessToken, selectedFile);
+                        if (!aliveRef.current) return;
                         setPreview(p);
                         if (!p.ok && p.error) setError(p.error);
                       } catch (err) {
+                        if (!aliveRef.current) return;
                         setError(
                           err instanceof Error ? err.message : "Could not re-check file"
                         );
+                      } finally {
+                        if (aliveRef.current) setImportJob({ kind: "idle" });
                       }
                     });
                   }}
@@ -481,7 +595,7 @@ export function ImportView() {
           </Panel>
         ) : null}
 
-        {preview && preview.rejected.length > 0 ? (
+        {preview && preview.rejected.length > 0 && !result?.ok ? (
           <Panel title="Rejected Rows">
             <ul className="max-h-48 space-y-1.5 overflow-y-auto text-[12px] text-muted">
               {preview.rejected.map((r) => (
@@ -497,46 +611,6 @@ export function ImportView() {
             </ul>
           </Panel>
         ) : null}
-
-        {result?.ok ? (
-          <Panel title="Import Complete">
-            {result.dbProjectRef != null && result.dbTimeEntryCount != null ? (
-              <p className="mb-3 text-[12px] text-muted">
-                Database{" "}
-                <span className="font-mono font-medium text-ink">
-                  {result.dbProjectRef}
-                </span>{" "}
-                now has{" "}
-                <span className="font-medium tabular-nums text-ink">
-                  {result.dbTimeEntryCount.toLocaleString()}
-                </span>{" "}
-                rows in time_entries.
-              </p>
-            ) : null}
-            <p className="text-[14px] text-ink">
-              <span className="font-semibold tabular-nums">
-                {result.processed.toLocaleString()}
-              </span>{" "}
-              rows processed
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <Stat label="Inserted" value={result.inserted} tone="ok" />
-              <Stat
-                label="Duplicates Skipped"
-                value={result.skippedDuplicate}
-                tone="muted"
-              />
-              <Stat label="Rejected" value={result.rejected} tone="muted" />
-            </div>
-            <button
-              type="button"
-              onClick={reset}
-              className="mt-4 text-[13px] font-medium text-brand-600 hover:underline"
-            >
-              Import Another File
-            </button>
-          </Panel>
-        ) : null}
       </div>
 
       {howToOpen ? <HowToImportModal onClose={() => setHowToOpen(false)} /> : null}
@@ -546,7 +620,7 @@ export function ImportView() {
           duplicates={preview.duplicates}
           total={preview.duplicatesTotal}
           wouldInsert={preview.wouldInsert}
-          pending={pending}
+          pending={importBusy}
           onCancel={() => setImportDupOpen(false)}
           onConfirm={runCommit}
         />
@@ -555,7 +629,7 @@ export function ImportView() {
       {repairPreview?.ok ? (
         <RepairDuplicatesModal
           preview={repairPreview}
-          pending={pending || !!repairProgress}
+          pending={pending || importBusy || !!repairProgress}
           progress={repairProgress}
           onCancel={() => {
             if (repairProgress) return;

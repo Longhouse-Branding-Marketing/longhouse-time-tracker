@@ -5,6 +5,7 @@ import { TIME_TRACKING_TAG } from "@/lib/cache-tags";
 import { requireAuthFromFormData } from "@/lib/hub/serverActionAuth";
 import { HubAccessError } from "@/lib/hub/verifyHubAccess";
 import { bustMemoryCache } from "@/lib/memory-cache";
+import { parseAliasInput } from "@/lib/import/resolvePerson";
 import {
   getSupabase,
   getSupabaseServiceRole,
@@ -181,9 +182,10 @@ async function saveEmployeeFallback(
     person: string;
     photo_url: string | null;
     active: boolean;
+    also_known_as: string[];
   }
 ): Promise<void> {
-  const { person, photo_url, active } = opts;
+  const { person, photo_url, active, also_known_as } = opts;
   await assertUniquePersonName(supabase, person, opts.id);
 
   if (opts.id == null) {
@@ -191,8 +193,20 @@ async function saveEmployeeFallback(
       person,
       photo_url,
       active,
+      also_known_as,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingColumnError(error)) {
+        const { error: retry } = await supabase.from("employees").insert({
+          person,
+          photo_url,
+          active,
+        });
+        if (retry) throw new Error(retry.message);
+        return;
+      }
+      throw new Error(error.message);
+    }
   } else {
     const { data: existing, error: loadError } = await supabase
       .from("employees")
@@ -205,12 +219,19 @@ async function saveEmployeeFallback(
     const oldPerson = existing.person as string;
     const { error: updateError } = await supabase
       .from("employees")
-      .update({ person, photo_url, active })
+      .update({ person, photo_url, active, also_known_as })
       .eq("id", opts.id);
-    if (updateError) throw new Error(updateError.message);
+    if (updateError) {
+      if (!isMissingColumnError(updateError)) {
+        throw new Error(updateError.message);
+      }
+      const { error: retry } = await supabase
+        .from("employees")
+        .update({ person, photo_url, active })
+        .eq("id", opts.id);
+      if (retry) throw new Error(retry.message);
+    }
 
-    // Cascade rename before/after employee update is not transactional here —
-    // migration 005 is required for true atomicity.
     if (oldPerson !== person) {
       for (const table of [
         "employee_schedules",
@@ -222,6 +243,13 @@ async function saveEmployeeFallback(
           .update({ person })
           .eq("person", oldPerson);
         if (error) throw new Error(error.message);
+      }
+      const { error: hashError } = await supabase.rpc(
+        "recompute_time_entry_hashes_for_person",
+        { p_id: opts.id, p_person: person }
+      );
+      if (hashError && !isMissingRpcError(hashError)) {
+        throw new Error(hashError.message);
       }
     }
   }
@@ -305,6 +333,7 @@ export async function saveEmployee(fd: FormData): Promise<ActionResult> {
   const id = idOf(fd);
   const active = bool(fd, "active");
   const photo_url = str(fd, "photo_url");
+  const alsoKnownAs = parseAliasInput(str(fd, "also_known_as"));
 
   try {
     await withSupabaseRetry(async () => {
@@ -314,6 +343,7 @@ export async function saveEmployee(fd: FormData): Promise<ActionResult> {
         p_person: person,
         p_photo_url: photo_url,
         p_active: active,
+        p_also_known_as: alsoKnownAs,
       });
       if (!error) return;
       // Don't surface schema-cache noise when fallback can finish the save.
@@ -323,6 +353,7 @@ export async function saveEmployee(fd: FormData): Promise<ActionResult> {
           person,
           photo_url,
           active,
+          also_known_as: alsoKnownAs,
         });
         return;
       }

@@ -244,3 +244,16 @@ select {
   bottom: -22rem;
   background: #0b4d84;
 }
+
+@keyframes lh-progress-indet {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+
+.lh-progress-indet {
+  animation: lh-progress-indet 1.4s ease-in-out infinite;
+}

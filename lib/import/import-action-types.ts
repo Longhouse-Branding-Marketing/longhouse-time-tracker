@@ -55,3 +55,17 @@ export type ImportCommitResult = {
   dbTimeEntryCount?: number;
   dbProjectRef?: string;
 };
+
+export type ImportProgressPhase = "matching" | "inserting" | "finishing";
+
+export type ImportProgressEvent = {
+  phase: ImportProgressPhase;
+  done: number;
+  total: number;
+  label: string;
+};
+
+export type ImportStreamEvent =
+  | (ImportProgressEvent & { type: "progress" })
+  | { type: "complete"; result: ImportCommitResult }
+  | { type: "error"; error: string };

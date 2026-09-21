@@ -1,5 +1,10 @@
 import type { EntryRow } from "./types";
 
+export type FilterableEntry = Pick<
+  EntryRow,
+  "date" | "person" | "department" | "role" | "task" | "type"
+>;
+
 export interface Filters {
   from: string;
   to: string;
@@ -63,7 +68,10 @@ export function defaultFilters(bounds: DateBounds): Filters {
   };
 }
 
-export function applyFilters(rows: EntryRow[], f: Filters): EntryRow[] {
+export function applyFilters<T extends FilterableEntry>(
+  rows: T[],
+  f: Filters
+): T[] {
   const people = new Set(f.people);
   const depts = new Set(f.departments);
   const roles = new Set(f.roles);
@@ -80,6 +88,12 @@ export function applyFilters(rows: EntryRow[], f: Filters): EntryRow[] {
     if (types.size && !(r.type && types.has(r.type))) return false;
     return true;
   });
+}
+
+/** People list/modal omit Department — keep other dimensions, drop dept. */
+export function withoutDepartments(f: Filters): Filters {
+  if (f.departments.length === 0) return f;
+  return { ...f, departments: [] };
 }
 
 export function isDefault(f: Filters, bounds: DateBounds): boolean {

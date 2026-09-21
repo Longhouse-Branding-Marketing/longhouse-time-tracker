@@ -12,6 +12,13 @@ export {
   type ParseMemtimeOptions,
 } from "./memtime";
 export {
+  aliasesToRemember,
+  formatAliasInput,
+  parseAliasInput,
+  toDirectory,
+  type DirectoryPerson,
+} from "./resolvePerson";
+export {
   isDuplicateOfExisting,
   planSoftDuplicateCleanup,
   existingEntryHashes,

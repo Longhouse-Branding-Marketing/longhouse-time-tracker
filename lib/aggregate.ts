@@ -97,6 +97,11 @@ export function computeWorkingDayAvg(
   return countedDays > 0 ? countedHours / countedDays : 0;
 }
 
+export {
+  computePersonOperations,
+  type PersonOperationsRow,
+} from "./personOperations";
+
 /** Label for the working-day average StatCard based on the people filter. */
 export function workingDayAvgLabel(filters: Filters): string {
   if (filters.people.length === 1) {

@@ -1,12 +1,13 @@
-"use server";
-
 import { revalidatePath, revalidateTag } from "next/cache";
 import { TIME_TRACKING_TAG } from "@/lib/cache-tags";
 import { requireHubAccessToken, HubAccessError } from "@/lib/hub/verifyHubAccess";
 import { getEmployees } from "@/lib/data";
 import {
+  aliasesToRemember,
   entryHash,
   parseMemtimeCsv,
+  toDirectory,
+  type ImportParseResult,
   type TimeEntryInsert,
 } from "@/lib/import";
 import {
@@ -22,6 +23,7 @@ import type {
   ImportCommitResult,
   ImportDuplicateRow,
   ImportPreviewResult,
+  ImportProgressEvent,
 } from "@/lib/import/import-action-types";
 import { countTimeEntries, existingHashSet, loadExistingInRange } from "./entry-db";
 
@@ -182,8 +184,10 @@ async function resolveImportNewRows(
   skippedRows: TimeEntryInsert[];
 }> {
   const employees = await getEmployees();
-  const employeeNames = employees.map((e) => e.person);
-  const parsed = parseMemtimeCsv(csvText, { sourceFile, employeeNames });
+  const parsed = parseMemtimeCsv(csvText, {
+    sourceFile,
+    employeeDirectory: toDirectory(employees),
+  });
   const inserts = parsed.valid.map((v) => v.insert);
   const { unique, intraDuplicates } = uniqueByHash(inserts);
 
@@ -223,13 +227,36 @@ async function withEmployeeIds(
   }
 }
 
+async function rememberImportAliases(parsed: ImportParseResult): Promise<void> {
+  const byPerson = new Map<string, string[]>();
+  for (const row of parsed.valid) {
+    for (const alias of aliasesToRemember(row.sourceUser, row.insert.person)) {
+      const list = byPerson.get(row.insert.person) ?? [];
+      const key = alias.toLowerCase();
+      if (!list.some((item) => item.toLowerCase() === key)) list.push(alias);
+      byPerson.set(row.insert.person, list);
+    }
+  }
+  if (byPerson.size === 0) return;
+
+  const supabase = getSupabaseServiceRole();
+  for (const [person, aliases] of byPerson) {
+    const { error } = await supabase.rpc("add_employee_aliases", {
+      p_person: person,
+      p_aliases: aliases,
+    });
+    if (error) return;
+  }
+}
+
 /**
  * Insert rows without ever surfacing entry_hash unique violations.
  * Prefers the SECURITY DEFINER RPC (ON CONFLICT DO NOTHING); falls back to
  * upsert / row-by-row, always treating 23505 as a skip.
  */
 async function insertIgnoringDuplicates(
-  rows: TimeEntryInsert[]
+  rows: TimeEntryInsert[],
+  onProgress?: (done: number, total: number) => void
 ): Promise<{ inserted: number; skipped: number; hardError?: string }> {
   const supabase = getSupabaseServiceRole();
   let inserted = 0;
@@ -247,6 +274,11 @@ async function insertIgnoringDuplicates(
     return Number(data ?? 0);
   }
 
+  const report = (done: number) => {
+    onProgress?.(Math.min(done, rows.length), rows.length);
+  };
+  report(0);
+
   for (let i = 0; i < rows.length; i += INSERT_BATCH) {
     const chunk = rows.slice(i, i + INSERT_BATCH);
     const rpcPayload = stripForRpc(chunk);
@@ -255,22 +287,27 @@ async function insertIgnoringDuplicates(
     if (batchWrote > 0) {
       inserted += batchWrote;
       skipped += Math.max(0, chunk.length - batchWrote);
+      report(i + chunk.length);
       continue;
     }
 
     if (batchWrote < 0) {
+      report(i);
       return { inserted, skipped, hardError: lastError };
     }
 
     // RPC returned 0 — row-by-row so one duplicate does not fail the whole batch.
-    for (const row of chunk) {
+    for (let j = 0; j < chunk.length; j++) {
+      const row = chunk[j];
       const onePayload = stripForRpc([row]);
       const oneWrote = await rpcInsert(onePayload);
       if (oneWrote < 0) {
+        report(i + j);
         return { inserted, skipped, hardError: lastError };
       }
       if (oneWrote > 0) inserted += 1;
       else skipped += 1;
+      report(i + j + 1);
     }
   }
 
@@ -313,7 +350,7 @@ export async function previewImport(
   try {
     const parsedOnly = parseMemtimeCsv(csvText, {
       sourceFile,
-      employeeNames: (await getEmployees()).map((e) => e.person),
+      employeeDirectory: toDirectory(await getEmployees()),
     });
 
     if (parsedOnly.valid.length === 0 && parsedOnly.rejected.length > 0) {
@@ -400,10 +437,15 @@ export async function commitImport(
   accessToken: string | null | undefined,
   csvText: string,
   sourceFile?: string | null,
-  meta?: { rejectedCount?: number; totalRows?: number }
+  meta?: {
+    rejectedCount?: number;
+    totalRows?: number;
+    onProgress?: (event: ImportProgressEvent) => void;
+  }
 ): Promise<ImportCommitResult> {
   const rejected = meta?.rejectedCount ?? 0;
   const processed = meta?.totalRows ?? 0;
+  const onProgress = meta?.onProgress;
 
   const denied = await authError(accessToken);
   if (denied) {
@@ -429,6 +471,13 @@ export async function commitImport(
   }
 
   try {
+    onProgress?.({
+      phase: "matching",
+      done: 0,
+      total: 1,
+      label: "Checking Duplicates…",
+    });
+
     const dbTimeEntryCount = await countTimeEntries();
     const dbProjectRef = supabaseProjectRef();
 
@@ -439,6 +488,13 @@ export async function commitImport(
     const resultMeta = { dbTimeEntryCount, dbProjectRef };
 
     if (newRows.length === 0) {
+      onProgress?.({
+        phase: "finishing",
+        done: 1,
+        total: 1,
+        label: "Updating Dashboard…",
+      });
+      await rememberImportAliases(parsed);
       return {
         ok: true,
         processed: totalRows,
@@ -449,8 +505,27 @@ export async function commitImport(
       };
     }
 
+    onProgress?.({
+      phase: "inserting",
+      done: 0,
+      total: newRows.length,
+      label: "Matching People…",
+    });
     const withIds = await withEmployeeIds(newRows);
-    const result = await insertIgnoringDuplicates(withIds);
+    onProgress?.({
+      phase: "inserting",
+      done: 0,
+      total: withIds.length,
+      label: "Importing Rows…",
+    });
+    const result = await insertIgnoringDuplicates(withIds, (done, total) => {
+      onProgress?.({
+        phase: "inserting",
+        done,
+        total,
+        label: "Importing Rows…",
+      });
+    });
     skippedDuplicate += result.skipped;
 
     if (result.hardError) {
@@ -517,7 +592,14 @@ export async function commitImport(
       };
     }
 
+    onProgress?.({
+      phase: "finishing",
+      done: 1,
+      total: 1,
+      label: "Updating Dashboard…",
+    });
     revalidateAfterImport();
+    await rememberImportAliases(parsed);
     const afterCount = await countTimeEntries();
     return {
       ok: true,
@@ -552,14 +634,3 @@ export async function commitImport(
   }
 }
 
-export async function getImportSetupStatus(
-  accessToken: string | null | undefined
-): Promise<{
-  serviceRoleConfigured: boolean;
-  error?: string;
-}> {
-  const denied = await authError(accessToken);
-  if (denied) return { serviceRoleConfigured: false, error: denied };
-  const { hasSupabaseServiceRole } = await import("@/lib/supabase");
-  return { serviceRoleConfigured: hasSupabaseServiceRole() };
-}

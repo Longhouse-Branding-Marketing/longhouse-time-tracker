@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { WarningCircleIcon } from "@phosphor-icons/react";
+import { FilterBar } from "@/components/FilterBar";
 import { PersonDetailPanel } from "@/components/people/PersonDetailPanel";
 import {
   Avatar,
@@ -11,18 +12,96 @@ import {
   PageShell,
   Panel,
 } from "@/components/ui";
-import type { Employee, OperationsKpi } from "@/lib/types";
-import { hours, n, statusTone } from "@/lib/formatters";
+import { computePersonOperations } from "@/lib/aggregate";
+import {
+  summarizeFilters,
+  useDashboardFilters,
+} from "@/lib/dashboard-filters";
+import {
+  applyFilters,
+  dateBounds,
+  defaultFilters,
+  extractOptions,
+  isDefault,
+  withoutDepartments,
+  type Filters,
+} from "@/lib/filtering";
+import {
+  initialDashboardFilters,
+  reconcileStoredFilters,
+  saveStoredFilters,
+} from "@/lib/filterStorage";
+import { hours, statusTone } from "@/lib/formatters";
+import type {
+  Employee,
+  EntryRow,
+  OperationsKpi,
+  PersonDailyTracking,
+} from "@/lib/types";
 
 export function PeopleConsistencyView({
-  kpis,
+  entries,
   employees,
+  kpis,
+  dailyTracking,
 }: {
-  kpis: OperationsKpi[];
+  entries: EntryRow[];
   employees: Employee[];
+  kpis: OperationsKpi[];
+  dailyTracking: PersonDailyTracking[];
 }) {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
-  const scheduleNeeded = kpis.filter((k) => k.status === "Schedule needed").length;
+  const { setSnapshot, clearSnapshot } = useDashboardFilters();
+
+  const activeEntries = useMemo(() => {
+    const active = new Set(
+      employees.filter((e) => e.active).map((e) => e.person)
+    );
+    return entries.filter((row) => active.has(row.person));
+  }, [entries, employees]);
+
+  const bounds = useMemo(() => dateBounds(activeEntries), [activeEntries]);
+  const options = useMemo(() => extractOptions(activeEntries), [activeEntries]);
+  const [filters, setFilters] = useState<Filters>(() =>
+    initialDashboardFilters(bounds, options)
+  );
+  const [filtersReady, setFiltersReady] = useState(false);
+
+  useEffect(() => {
+    if (!bounds.min) return;
+    setFilters((current) => reconcileStoredFilters(current, bounds, options));
+    setFiltersReady(true);
+  }, [bounds.min, bounds.max, options]);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    saveStoredFilters(filters);
+  }, [filters, filtersReady]);
+
+  const peopleFilters = useMemo(() => withoutDepartments(filters), [filters]);
+
+  useEffect(() => {
+    setSnapshot({
+      filters: peopleFilters,
+      isActive: !isDefault(peopleFilters, bounds),
+      summary: summarizeFilters(peopleFilters),
+    });
+    return () => clearSnapshot();
+  }, [peopleFilters, bounds, setSnapshot, clearSnapshot]);
+
+  const rows = useMemo(
+    () => applyFilters(activeEntries, peopleFilters),
+    [activeEntries, peopleFilters]
+  );
+
+  const opsRows = useMemo(
+    () => computePersonOperations(rows, dailyTracking, peopleFilters, kpis),
+    [rows, dailyTracking, peopleFilters, kpis]
+  );
+
+  const scheduleNeeded = opsRows.filter(
+    (k) => k.status === "Schedule needed"
+  ).length;
 
   const photoOf = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -30,9 +109,32 @@ export function PeopleConsistencyView({
     return map;
   }, [employees]);
 
+  const update = (next: Partial<Filters>) => {
+    setFilters((f) => ({ ...f, ...next }));
+  };
+
+  const clearFilters = () => {
+    const cleared = defaultFilters(bounds);
+    setFilters(cleared);
+    saveStoredFilters(cleared);
+  };
+
   return (
     <PageShell>
       <PageHeader title="People" />
+
+      {bounds.min ? (
+        <div className="mt-5">
+          <FilterBar
+            filters={peopleFilters}
+            options={options}
+            bounds={bounds}
+            onChange={update}
+            onClear={clearFilters}
+            hide={["department"]}
+          />
+        </div>
+      ) : null}
 
       {scheduleNeeded > 0 ? (
         <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-review-soft bg-review-soft px-4 py-3 text-[13px] text-[color:var(--color-review)]">
@@ -44,15 +146,16 @@ export function PeopleConsistencyView({
           />
           <span>
             {scheduleNeeded}{" "}
-            {scheduleNeeded === 1 ? "person needs" : "people need"} a working schedule
-            set in Settings before their working-day average can be measured.
+            {scheduleNeeded === 1 ? "person needs" : "people need"} a working
+            schedule set in Settings before their working-day average can be
+            measured.
           </span>
         </div>
       ) : null}
 
       <Panel title="Tracking Consistency" className="mt-6" noBodyPadding>
-        {kpis.length === 0 ? (
-          <EmptyRow>No people to review.</EmptyRow>
+        {opsRows.length === 0 ? (
+          <EmptyRow>No people match the current filters.</EmptyRow>
         ) : (
           <div className="lh-scroll overflow-auto">
             <table className="lh-table">
@@ -67,8 +170,8 @@ export function PeopleConsistencyView({
                 </tr>
               </thead>
               <tbody>
-                {kpis.map((k) => {
-                  const hasDays = n(k.counted_working_days) > 0;
+                {opsRows.map((k) => {
+                  const hasDays = k.countedWorkingDays > 0;
                   const selected = selectedPerson === k.person;
                   return (
                     <tr
@@ -90,18 +193,16 @@ export function PeopleConsistencyView({
                         </button>
                       </td>
                       <td className="text-center tabular-nums">
-                        {hasDays ? hours(k.avg_working_day) : "—"}
+                        {hasDays ? hours(k.avgWorkingDay) : "—"}
                       </td>
                       <td className="text-center tabular-nums">
-                        {n(k.median_active_day) > 0
-                          ? hours(k.median_active_day)
-                          : "—"}
+                        {k.medianActiveDay > 0 ? hours(k.medianActiveDay) : "—"}
                       </td>
                       <td className="text-center tabular-nums">
-                        {n(k.counted_working_days).toLocaleString()}
+                        {k.countedWorkingDays.toLocaleString()}
                       </td>
                       <td className="text-center tabular-nums">
-                        {hours(k.tracked_hours)}
+                        {hours(k.trackedHours)}
                       </td>
                       <td>
                         <Badge tone={statusTone(k.status)}>{k.status}</Badge>
@@ -119,6 +220,13 @@ export function PeopleConsistencyView({
         <PersonDetailPanel
           person={selectedPerson}
           onClose={() => setSelectedPerson(null)}
+          filters={peopleFilters}
+          options={options}
+          bounds={bounds}
+          onFiltersChange={update}
+          onClearFilters={clearFilters}
+          dailyTracking={dailyTracking}
+          kpis={kpis}
         />
       ) : null}
     </PageShell>

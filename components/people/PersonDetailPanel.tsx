@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { FilterBar } from "@/components/FilterBar";
 import { EditModal } from "@/components/settings/EditModal";
 import { Avatar, Badge, EmptyRow } from "@/components/ui";
+import { computePersonOperations } from "@/lib/aggregate";
 import { refetchApi } from "@/lib/api";
+import { applyFilters, type DateBounds, type FilterOptions, type Filters } from "@/lib/filtering";
 import { useHubAccessToken } from "@/lib/hub/HubSessionContext";
 import { formatDate, hours, n, pct, statusTone } from "@/lib/formatters";
 import type {
   Employee,
   OperationsKpi,
+  PersonDailyTracking,
   PersonEntryDetail,
 } from "@/lib/types";
 
@@ -36,9 +40,23 @@ function formatCreatedAt(value: string | null): string {
 export function PersonDetailPanel({
   person,
   onClose,
+  filters,
+  options,
+  bounds,
+  onFiltersChange,
+  onClearFilters,
+  dailyTracking,
+  kpis,
 }: {
   person: string;
   onClose: () => void;
+  filters: Filters;
+  options: FilterOptions;
+  bounds: DateBounds;
+  onFiltersChange: (next: Partial<Filters>) => void;
+  onClearFilters: () => void;
+  dailyTracking: PersonDailyTracking[];
+  kpis: OperationsKpi[];
 }) {
   const accessToken = useHubAccessToken();
   const [state, setState] = useState<
@@ -72,26 +90,44 @@ export function PersonDetailPanel({
     };
   }, [person, accessToken]);
 
+  const scopedFilters = useMemo(
+    () => ({ ...filters, people: [] as string[] }),
+    [filters]
+  );
+
+  const visibleEntries = useMemo(() => {
+    if (state.status !== "ready") return [];
+    return applyFilters(state.data.entries, scopedFilters);
+  }, [state, scopedFilters]);
+
+  const ops = useMemo(() => {
+    if (state.status !== "ready") return null;
+    const personFilters: Filters = { ...scopedFilters, people: [person] };
+    return (
+      computePersonOperations(visibleEntries, dailyTracking, personFilters, kpis)[0] ??
+      null
+    );
+  }, [state, visibleEntries, dailyTracking, scopedFilters, person, kpis]);
+
   const stats = useMemo(() => {
     if (state.status !== "ready") return null;
-    const { entries, kpi } = state.data;
     let billableHours = 0;
     let totalHours = 0;
-    for (const row of entries) {
+    for (const row of visibleEntries) {
       const h = n(row.hours);
       totalHours += h;
       if (row.is_billable) billableHours += h;
     }
     return {
-      entries: entries.length,
-      tracked: kpi ? n(kpi.tracked_hours) : totalHours,
-      avg: kpi ? n(kpi.avg_working_day) : 0,
-      countedDays: kpi ? n(kpi.counted_working_days) : 0,
-      median: kpi ? n(kpi.median_active_day) : 0,
+      entries: visibleEntries.length,
+      tracked: ops ? ops.trackedHours : totalHours,
+      avg: ops ? ops.avgWorkingDay : 0,
+      countedDays: ops ? ops.countedWorkingDays : 0,
+      median: ops ? ops.medianActiveDay : 0,
       billablePct: totalHours > 0 ? (100 * billableHours) / totalHours : 0,
-      status: kpi?.status ?? null,
+      status: ops?.status ?? state.data.kpi?.status ?? null,
     };
-  }, [state]);
+  }, [state, visibleEntries, ops]);
 
   return (
     <EditModal
@@ -107,6 +143,19 @@ export function PersonDetailPanel({
         </Link>
       }
     >
+      {bounds.min ? (
+        <div className="border-b border-line px-5 py-3">
+          <FilterBar
+            filters={filters}
+            options={options}
+            bounds={bounds}
+            onChange={onFiltersChange}
+            onClear={onClearFilters}
+            hide={["department", "person"]}
+          />
+        </div>
+      ) : null}
+
       {state.status === "loading" ? (
         <div className="px-5 py-10 text-center text-[13px] text-muted">
           Loading entries…
@@ -162,8 +211,8 @@ export function PersonDetailPanel({
 
           <div className="mt-6">
             <h3 className="lh-section-title">Time Entries</h3>
-            {state.data.entries.length === 0 ? (
-              <EmptyRow>No entries for this person.</EmptyRow>
+            {visibleEntries.length === 0 ? (
+              <EmptyRow>No entries for this person in the current filters.</EmptyRow>
             ) : (
               <div className="lh-scroll mt-3 max-h-[min(48vh,420px)] overflow-auto rounded-lg border border-line">
                 <table className="lh-table">
@@ -181,7 +230,7 @@ export function PersonDetailPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {state.data.entries.map((row) => (
+                    {visibleEntries.map((row) => (
                       <tr key={row.id}>
                         <td className="whitespace-nowrap tabular-nums">
                           {formatDate(row.date)}

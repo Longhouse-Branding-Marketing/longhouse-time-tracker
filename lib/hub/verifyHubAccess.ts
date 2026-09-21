@@ -4,6 +4,7 @@ import {
   getServerSupabaseAnonKey,
   getServerSupabaseUrl,
   getToolSlug,
+  isHubAuthBypassed,
 } from "./env";
 
 export class HubAccessError extends Error {
@@ -19,6 +20,18 @@ export class HubAccessError extends Error {
 function isAllowedEmail(email: string | null | undefined, domain: string): boolean {
   if (!email) return false;
   return email.trim().toLowerCase().endsWith(`@${domain}`);
+}
+
+function devBypassUser(): User {
+  return {
+    id: "00000000-0000-4000-a000-000000000001",
+    aud: "authenticated",
+    role: "authenticated",
+    email: "dev@localhost",
+    app_metadata: { provider: "dev-bypass" },
+    user_metadata: { full_name: "Local dev" },
+    created_at: "2026-01-01T00:00:00.000Z",
+  } as User;
 }
 
 async function verifyToken(accessToken: string): Promise<User> {
@@ -80,6 +93,7 @@ function bearerToken(req: Request): string | null {
 }
 
 export async function requireHubAccessFromRequest(req: Request): Promise<User> {
+  if (isHubAuthBypassed()) return devBypassUser();
   const token = bearerToken(req);
   if (!token) {
     throw new HubAccessError("Missing or invalid Authorization header", 401);
@@ -90,6 +104,7 @@ export async function requireHubAccessFromRequest(req: Request): Promise<User> {
 export async function requireHubAccessToken(
   accessToken: string | null | undefined
 ): Promise<User> {
+  if (isHubAuthBypassed()) return devBypassUser();
   const token = accessToken?.trim();
   if (!token) {
     throw new HubAccessError("Missing or invalid Authorization header", 401);

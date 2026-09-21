@@ -6,7 +6,8 @@
     "dev": "next dev -p 3007",
     "build": "next build",
     "start": "next start -p 3007",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types --test lib/import/hash-dedup.test.mjs lib/import/resolvePerson.test.ts lib/import/import-stream.test.ts lib/aggregate-person-ops.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -3,15 +3,22 @@
 import { PeopleConsistencyView } from "@/components/people/PeopleConsistencyView";
 import { PageError, PageLoading } from "@/components/PageStatus";
 import { useApiData } from "@/lib/api";
-import type { Employee, OperationsKpi } from "@/lib/types";
+import type {
+  Employee,
+  EntryRow,
+  OperationsKpi,
+  PersonDailyTracking,
+} from "@/lib/types";
 
-type PeoplePayload = {
-  kpis: OperationsKpi[];
+type DashboardPayload = {
+  entries: EntryRow[];
   employees: Employee[];
+  kpis: OperationsKpi[];
+  dailyTracking: PersonDailyTracking[];
 };
 
 export default function PeoplePage() {
-  const state = useApiData<PeoplePayload>("/api/people");
+  const state = useApiData<DashboardPayload>("/api/dashboard");
 
   if (state.status === "loading") return <PageLoading label="Loading people…" />;
   if (state.status === "error") {
@@ -20,8 +27,10 @@ export default function PeoplePage() {
 
   return (
     <PeopleConsistencyView
-      kpis={state.data.kpis}
+      entries={state.data.entries}
       employees={state.data.employees}
+      kpis={state.data.kpis}
+      dailyTracking={state.data.dailyTracking}
     />
   );
 }

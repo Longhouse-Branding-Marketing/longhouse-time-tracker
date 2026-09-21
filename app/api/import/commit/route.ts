@@ -21,7 +21,11 @@ function intField(form: FormData, key: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Multipart CSV upload — avoids the 1MB Server Actions body limit. */
+function ssePayload(obj: unknown): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(obj)}\n\n`);
+}
+
+/** Multipart CSV upload — avoids the 1MB Server Actions body limit. Streams insert progress. */
 export async function POST(req: Request) {
   try {
     await requireHubAccessFromRequest(req);
@@ -33,15 +37,63 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Missing CSV file" }, { status: 400 });
     }
 
-    const csvText = await file.text();
     const rejectedCount = intField(form, "rejectedCount") ?? 0;
     const totalRows = intField(form, "totalRows");
+    const sourceFile = file.name || null;
 
-    const result = await commitImport(token, csvText, file.name || null, {
-      rejectedCount,
-      totalRows,
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (obj: unknown) => {
+          controller.enqueue(ssePayload(obj));
+        };
+        try {
+          send({
+            type: "progress",
+            phase: "matching",
+            done: 0,
+            total: 1,
+            label: "Reading CSV…",
+          });
+          const csvText = await file.text();
+          send({
+            type: "progress",
+            phase: "matching",
+            done: 0,
+            total: 1,
+            label: "Checking Duplicates…",
+          });
+          const result = await commitImport(token, csvText, sourceFile, {
+            rejectedCount,
+            totalRows,
+            onProgress: (event) => send({ type: "progress", ...event }),
+          });
+          send({ type: "complete", result });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Failed to commit import";
+          try {
+            send({ type: "error", error: message });
+          } catch {
+            // Client already disconnected.
+          }
+        } finally {
+          try {
+            controller.close();
+          } catch {
+            // Already closed.
+          }
+        }
+      },
     });
-    return NextResponse.json(result);
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (err) {
     if (err instanceof HubAccessError) {
       return NextResponse.json({ ok: false, error: err.message }, { status: err.status });

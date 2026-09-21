@@ -10,19 +10,38 @@ import {
   type Filters,
 } from "@/lib/filtering";
 
+export type FilterField =
+  | "person"
+  | "department"
+  | "role"
+  | "task"
+  | "type";
+
 export function FilterBar({
   filters,
   options,
   bounds,
   onChange,
   onClear,
+  hide = [],
 }: {
   filters: Filters;
   options: FilterOptions;
   bounds: DateBounds;
   onChange: (next: Partial<Filters>) => void;
   onClear: () => void;
+  hide?: FilterField[];
 }) {
+  const hidden = new Set(hide);
+  const defaultCheck: Filters = {
+    ...filters,
+    people: hidden.has("person") ? [] : filters.people,
+    departments: hidden.has("department") ? [] : filters.departments,
+    roles: hidden.has("role") ? [] : filters.roles,
+    tasks: hidden.has("task") ? [] : filters.tasks,
+    types: hidden.has("type") ? [] : filters.types,
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <DateRangePicker
@@ -32,38 +51,48 @@ export function FilterBar({
         onChange={(r) => onChange({ from: r.from, to: r.to })}
       />
 
-      <MultiSelect
-        label="Person"
-        options={options.people}
-        selected={filters.people}
-        onChange={(v) => onChange({ people: v })}
-      />
-      <MultiSelect
-        label="Department"
-        options={options.departments}
-        selected={filters.departments}
-        onChange={(v) => onChange({ departments: v })}
-      />
-      <MultiSelect
-        label="Role"
-        options={options.roles}
-        selected={filters.roles}
-        onChange={(v) => onChange({ roles: v })}
-      />
-      <MultiSelect
-        label="Task"
-        options={options.tasks}
-        selected={filters.tasks}
-        onChange={(v) => onChange({ tasks: v })}
-      />
-      <MultiSelect
-        label="Type"
-        options={options.types}
-        selected={filters.types}
-        onChange={(v) => onChange({ types: v })}
-      />
+      {hidden.has("person") ? null : (
+        <MultiSelect
+          label="Person"
+          options={options.people}
+          selected={filters.people}
+          onChange={(v) => onChange({ people: v })}
+        />
+      )}
+      {hidden.has("department") ? null : (
+        <MultiSelect
+          label="Department"
+          options={options.departments}
+          selected={filters.departments}
+          onChange={(v) => onChange({ departments: v })}
+        />
+      )}
+      {hidden.has("role") ? null : (
+        <MultiSelect
+          label="Role"
+          options={options.roles}
+          selected={filters.roles}
+          onChange={(v) => onChange({ roles: v })}
+        />
+      )}
+      {hidden.has("task") ? null : (
+        <MultiSelect
+          label="Task"
+          options={options.tasks}
+          selected={filters.tasks}
+          onChange={(v) => onChange({ tasks: v })}
+        />
+      )}
+      {hidden.has("type") ? null : (
+        <MultiSelect
+          label="Type"
+          options={options.types}
+          selected={filters.types}
+          onChange={(v) => onChange({ types: v })}
+        />
+      )}
 
-      {!isDefault(filters, bounds) ? (
+      {!isDefault(defaultCheck, bounds) ? (
         <button
           type="button"
           onClick={onClear}

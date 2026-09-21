@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeftIcon } from "@phosphor-icons/react";
 import { FilterBar } from "@/components/FilterBar";
+import { PersonDetailPanel } from "@/components/people/PersonDetailPanel";
 import { Avatar, PageHeader, PageShell, Panel, StatCard } from "@/components/ui";
 import { HoursOverTime, DayDetailDrawer } from "@/components/charts/HoursOverTime";
 import { BillableDonut } from "@/components/charts/BillableDonut";
@@ -104,6 +105,7 @@ export function HomeDashboard({
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [dayDetailOpen, setDayDetailOpen] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const { setSnapshot, clearSnapshot } = useDashboardFilters();
 
   useEffect(() => {
@@ -213,6 +215,16 @@ export function HomeDashboard({
     setFilters((f) => ({ ...f, ...next }));
   };
 
+  const clearFilters = () => {
+    const cleared = defaultFilters(bounds);
+    setFilters(cleared);
+    saveStoredFilters(cleared);
+    setDrillStack([]);
+    setSelectedDay(null);
+    setSelectedHour(null);
+    setDayDetailOpen(false);
+  };
+
   const isIsoDay = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(key);
 
   const drillInto = (key: string) => {
@@ -289,7 +301,7 @@ export function HomeDashboard({
 
   return (
     <PageShell>
-      <PageHeader title="Where Is Our Time Going?" />
+      <PageHeader title="Where is our time going?" />
 
       {!bounds.min ? (
         <p className="mt-5 rounded-lg border border-line bg-surface px-4 py-3 text-[13px] text-muted">
@@ -308,15 +320,7 @@ export function HomeDashboard({
           options={options}
           bounds={bounds}
           onChange={update}
-          onClear={() => {
-            const cleared = defaultFilters(bounds);
-            setFilters(cleared);
-            saveStoredFilters(cleared);
-            setDrillStack([]);
-            setSelectedDay(null);
-            setSelectedHour(null);
-            setDayDetailOpen(false);
-          }}
+          onClear={clearFilters}
         />
       </div>
 
@@ -418,9 +422,15 @@ export function HomeDashboard({
           </p>
         ) : (
           people.map((p) => (
-            <div
+            <button
               key={p.person}
-              className="flex items-start gap-3 rounded-xl border border-line bg-surface px-4 py-3.5"
+              type="button"
+              onClick={() => setSelectedPerson(p.person)}
+              className={`flex items-start gap-3 rounded-xl border bg-surface px-4 py-3.5 text-left transition-colors hover:bg-tint/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                selectedPerson === p.person
+                  ? "border-brand-600/40 bg-tint/80"
+                  : "border-line"
+              }`}
             >
               <Avatar name={p.person} photoUrl={photoOf.get(p.person)} size="md" />
               <div className="min-w-0 flex-1">
@@ -434,10 +444,24 @@ export function HomeDashboard({
                   <span>{pct(p.billablePct)} billable</span>
                 </div>
               </div>
-            </div>
+            </button>
           ))
         )}
       </Panel>
+
+      {selectedPerson ? (
+        <PersonDetailPanel
+          person={selectedPerson}
+          onClose={() => setSelectedPerson(null)}
+          filters={filters}
+          options={options}
+          bounds={bounds}
+          onFiltersChange={update}
+          onClearFilters={clearFilters}
+          dailyTracking={dailyTracking}
+          kpis={kpis}
+        />
+      ) : null}
     </PageShell>
   );
 }

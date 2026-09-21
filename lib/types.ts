@@ -86,6 +86,8 @@ export interface Employee {
   start_date: string | null;
   end_date: string | null;
   notes: string | null;
+  /** Memtime User strings, emails, and former preferred names. */
+  also_known_as?: string[] | null;
 }
 
 export interface EmployeeSchedule {

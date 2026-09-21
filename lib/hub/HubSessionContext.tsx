@@ -11,7 +11,11 @@ import {
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { createToolSupabase } from "@/integrations/tool-auth/lib/supabase.js";
-import { getClientHubAuthConfig } from "./env";
+import {
+  DEV_HUB_BYPASS_TOKEN,
+  getClientHubAuthConfig,
+  isHubAuthBypassed,
+} from "./env";
 
 type HubSessionContextValue = {
   session: Session | null;
@@ -23,10 +27,12 @@ const HubSessionContext = createContext<HubSessionContextValue | null>(null);
 
 export function HubSessionProvider({ children }: { children: ReactNode }) {
   const config = getClientHubAuthConfig();
+  const bypassAuth = isHubAuthBypassed();
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!bypassAuth);
 
   useEffect(() => {
+    if (bypassAuth) return undefined;
     if (!config.supabaseUrl || !config.supabaseAnonKey) {
       setLoading(false);
       return undefined;
@@ -50,15 +56,17 @@ export function HubSessionProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, [config.supabaseAnonKey, config.supabaseUrl]);
+  }, [bypassAuth, config.supabaseAnonKey, config.supabaseUrl]);
 
   const value = useMemo(
     () => ({
       session,
-      accessToken: session?.access_token ?? null,
+      accessToken: bypassAuth
+        ? DEV_HUB_BYPASS_TOKEN
+        : session?.access_token ?? null,
       loading,
     }),
-    [session, loading]
+    [bypassAuth, session, loading]
   );
 
   return (
