@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getPersonDailyTracking } from "@/lib/data";
+import { getPersonDailyTracking, getSchedules } from "@/lib/data";
 import { computeCompletedDayStatus } from "@/lib/import/completedDay";
+import { applyScheduleHistory } from "@/lib/schedules";
 import {
   HubAccessError,
   requireHubAccessFromRequest,
@@ -9,8 +10,13 @@ import {
 export async function GET(req: Request) {
   try {
     await requireHubAccessFromRequest(req);
-    const daily = await getPersonDailyTracking();
-    const status = computeCompletedDayStatus(daily);
+    const [daily, schedules] = await Promise.all([
+      getPersonDailyTracking(),
+      getSchedules(),
+    ]);
+    const status = computeCompletedDayStatus(
+      applyScheduleHistory(daily, schedules)
+    );
     return NextResponse.json(status);
   } catch (err) {
     if (err instanceof HubAccessError) {

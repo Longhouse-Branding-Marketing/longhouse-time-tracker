@@ -160,4 +160,21 @@ describe("computePersonOperations", () => {
     assert.equal(row.status, "Needs review");
     assert.equal(row.avgWorkingDay, 4);
   });
+
+  it("compares the average with the goals that applied on counted days", () => {
+    const rows = [
+      entry("Hai", "2026-09-01", 6.5),
+      entry("Hai", "2026-09-02", 6.5),
+    ];
+    const daily = [
+      day("Hai", "2026-09-01", 6.5, true, 6.5),
+      day("Hai", "2026-09-02", 6.5, true, 8),
+    ];
+    const [row] = computePersonOperations(rows, daily, filters, [
+      kpi("Hai", "On track"),
+    ]);
+    assert.equal(row.avgWorkingDay, 6.5);
+    assert.equal(row.countedWorkingDays, 2);
+    assert.equal(row.status, "Needs review");
+  });
 });

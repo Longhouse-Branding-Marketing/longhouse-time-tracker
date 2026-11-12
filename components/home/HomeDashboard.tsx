@@ -15,6 +15,7 @@ import {
   computeBillableSplit,
   computeHierarchy,
   computePersonSummaries,
+  computePersonOperations,
   computeSummary,
   computeTimeSeries,
   computeWorkingDayAvg,
@@ -148,12 +149,29 @@ export function HomeDashboard({
   );
   const avgLabel = useMemo(() => workingDayAvgLabel(filters), [filters]);
   const opsSummary = useMemo(() => {
+    // All-time, same counted-day rules as People. Daily rows already follow
+    // the schedule in effect each day, so a new schedule does not rescore
+    // earlier periods. Structural statuses still come from the KPI rows.
+    const allTime = computePersonOperations(
+      [],
+      dailyTracking,
+      {
+        from: "",
+        to: "",
+        people: [],
+        departments: [],
+        roles: [],
+        tasks: [],
+        types: [],
+      },
+      kpis
+    );
     let onTrack = 0;
-    for (const k of kpiPeople) {
-      if (k.status === "On track") onTrack += 1;
+    for (const row of allTime) {
+      if (row.status === "On track") onTrack += 1;
     }
     return { onTrack };
-  }, [kpiPeople]);
+  }, [dailyTracking, kpis]);
   const drillScope: DrillScope | undefined =
     drillStack.length > 0 ? drillStack[drillStack.length - 1] : undefined;
   const scopeFrom = drillScope?.from ?? filters.from;

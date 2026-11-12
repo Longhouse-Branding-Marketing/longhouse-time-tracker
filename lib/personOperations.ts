@@ -35,6 +35,10 @@ export interface PersonOperationsRow {
 /**
  * Per-person operations KPIs for the current filter scope.
  * Uses the same counted-working-day rules as `computeWorkingDayAvg`.
+ * Those flags already follow the schedule in effect on each date, so a later
+ * schedule change does not pull earlier days into the average.
+ * On track / close / needs review compares the average with the daily goals
+ * of the counted days in the filter (the goals that applied then).
  */
 export function computePersonOperations(
   rows: Array<{ person: string; date: string; hours: number | string | null }>,
@@ -74,15 +78,12 @@ export function computePersonOperations(
   const countedHours = new Map<string, number>();
   const countedDays = new Map<string, number>();
   const activeDayHours = new Map<string, number[]>();
-  const goalByPerson = new Map<string, number>();
+  const goalSum = new Map<string, number>();
 
   for (const day of daily) {
     if (!people.has(day.person)) continue;
     if (filters.from && day.date < filters.from) continue;
     if (filters.to && day.date > filters.to) continue;
-    if (day.daily_goal != null && !goalByPerson.has(day.person)) {
-      goalByPerson.set(day.person, n(day.daily_goal));
-    }
     if (!day.counted_working_day) continue;
 
     const dayHours = hasDimFilters
@@ -96,6 +97,7 @@ export function computePersonOperations(
       day.person,
       (countedHours.get(day.person) ?? 0) + dayHours
     );
+    goalSum.set(day.person, (goalSum.get(day.person) ?? 0) + n(day.daily_goal));
     if (dayHours > 0) {
       const list = activeDayHours.get(day.person) ?? [];
       list.push(dayHours);
@@ -110,7 +112,7 @@ export function computePersonOperations(
     const days = countedDays.get(person) ?? 0;
     const hoursSum = countedHours.get(person) ?? 0;
     const avg = days > 0 ? hoursSum / days : 0;
-    const goal = goalByPerson.get(person) ?? 6.5;
+    const goal = days > 0 ? (goalSum.get(person) ?? 0) / days : 6.5;
     let status = kpi.status;
     if (!STRUCTURAL_KPI_STATUSES.has(status)) {
       if (days === 0) status = "Needs review";

@@ -7,6 +7,13 @@ import { HubAccessError } from "@/lib/hub/verifyHubAccess";
 import { bustMemoryCache } from "@/lib/memory-cache";
 import { parseAliasInput } from "@/lib/import/resolvePerson";
 import {
+  currentSchedule,
+  planScheduleChange,
+  planScheduleDelete,
+  validateScheduleWindow,
+  type ScheduleWindow,
+} from "@/lib/schedules";
+import {
   getSupabase,
   getSupabaseServiceRole,
   hasSupabaseServiceRole,
@@ -403,6 +410,114 @@ export async function deleteEmployee(fd: FormData): Promise<ActionResult> {
 }
 
 // --- Employee schedules ----------------------------------------------------
+// Several periods per person. NULL start = since tracking began. NULL end =
+// the current open period. Logging a change closes the previous period; it
+// does not rewrite that period's weekdays.
+
+interface ScheduleRecord extends ScheduleWindow {
+  person: string;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+  daily_goal: number | string | null;
+  include_in_operations_kpi: boolean;
+  notes: string | null;
+  employee_id: number | null;
+}
+
+function asDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.slice(0, 10);
+}
+
+function parseDailyGoal(fd: FormData): number | { error: string } {
+  const daily = str(fd, "daily_goal");
+  if (!daily) return 6.5;
+  const goal = Number(daily);
+  if (!Number.isFinite(goal) || goal < 0) {
+    return { error: "Daily goal must be a number of hours." };
+  }
+  return goal;
+}
+
+function schedulePattern(fd: FormData, active: boolean, goal: number, notes: string | null) {
+  return {
+    monday: bool(fd, "monday"),
+    tuesday: bool(fd, "tuesday"),
+    wednesday: bool(fd, "wednesday"),
+    thursday: bool(fd, "thursday"),
+    friday: bool(fd, "friday"),
+    saturday: bool(fd, "saturday"),
+    sunday: bool(fd, "sunday"),
+    daily_goal: goal,
+    include_in_operations_kpi: active ? bool(fd, "include_in_operations_kpi") : false,
+    notes,
+  };
+}
+
+async function loadScheduleContext(
+  supabase: SupabaseClient,
+  person: string
+): Promise<{ active: boolean; employeeId: number; schedules: ScheduleRecord[] }> {
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("id, active")
+    .eq("person", person)
+    .maybeSingle();
+  if (employeeError) throw new Error(employeeError.message);
+  if (!employee) throw new Error("Person not found");
+
+  const { data, error } = await supabase
+    .from("employee_schedules")
+    .select(
+      "id, person, effective_start_date, effective_end_date, monday, tuesday, wednesday, thursday, friday, saturday, sunday, daily_goal, include_in_operations_kpi, notes, created_at, employee_id"
+    )
+    .eq("person", person);
+  if (error) throw new Error(error.message);
+
+  const schedules = ((data ?? []) as ScheduleRecord[]).map((row) => ({
+    ...row,
+    id: Number(row.id),
+    effective_start_date: asDate(row.effective_start_date),
+    effective_end_date: asDate(row.effective_end_date),
+    employee_id: row.employee_id == null ? null : Number(row.employee_id),
+  }));
+
+  return {
+    active: employee.active !== false,
+    employeeId: Number(employee.id),
+    schedules,
+  };
+}
+
+async function writeSchedule(
+  supabase: SupabaseClient,
+  id: number | null,
+  row: Record<string, unknown>
+): Promise<void> {
+  const query = id
+    ? supabase.from("employee_schedules").update(row).eq("id", id)
+    : supabase.from("employee_schedules").insert(row);
+  const { error } = await query;
+  if (error) throw new Error(error.message);
+}
+
+async function closeSchedulePeriods(
+  supabase: SupabaseClient,
+  ids: number[],
+  closeEnd: string
+): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await supabase
+    .from("employee_schedules")
+    .update({ effective_end_date: closeEnd })
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+}
 
 export async function saveSchedule(fd: FormData): Promise<ActionResult> {
   const denied = await ensureAuth(fd);
@@ -411,66 +526,170 @@ export async function saveSchedule(fd: FormData): Promise<ActionResult> {
   const person = str(fd, "person");
   if (!person) return { ok: false, error: "Person is required" };
 
-  let active = true;
-  let id = idOf(fd);
+  const goal = parseDailyGoal(fd);
+  if (typeof goal !== "number") return { ok: false, error: goal.error };
 
   try {
-    await withSupabaseRetry(async () => {
-      const supabase = writeClient();
-      const { data: employee, error: employeeError } = await supabase
-        .from("employees")
-        .select("active")
-        .eq("person", person)
-        .maybeSingle();
-      if (employeeError) throw new Error(employeeError.message);
-      active = employee?.active !== false;
+    const context = await withSupabaseRetry(() =>
+      loadScheduleContext(writeClient(), person)
+    );
+    const supabase = writeClient();
+    const { active, employeeId, schedules } = context;
 
-      // One permanent schedule per person: update the latest row, or create one.
-      if (!id) {
-        const { data: existing, error } = await supabase
-          .from("employee_schedules")
-          .select("id")
-          .eq("person", person)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (error) throw new Error(error.message);
-        id = existing?.id ?? null;
+    let intent = str(fd, "intent");
+    let id = idOf(fd);
+    if (intent !== "create" && intent !== "change" && intent !== "correct") {
+      intent = schedules.length === 0 ? "create" : "correct";
+      if (intent === "correct" && id == null) {
+        id = currentSchedule(schedules)?.id ?? null;
       }
-    });
+    }
+
+    const base = {
+      person,
+      employee_id: employeeId,
+    };
+
+    if (intent === "create") {
+      if (schedules.length > 0) {
+        return {
+          ok: false,
+          error:
+            "This person already has a schedule. Log a change, or update the current period.",
+        };
+      }
+      await writeSchedule(supabase, null, {
+        ...base,
+        ...schedulePattern(fd, active, goal, fd.has("notes_present") ? str(fd, "notes") : null),
+        // First schedule covers every tracked day until a change is logged.
+        effective_start_date: null,
+        effective_end_date: null,
+      });
+    } else if (intent === "change") {
+      const plan = planScheduleChange(schedules, str(fd, "effective_start_date"));
+      if (!plan.ok) return { ok: false, error: plan.error };
+
+      const current = currentSchedule(
+        schedules.filter((schedule) => schedule.id !== plan.updateId)
+      );
+      const notes = fd.has("notes_present")
+        ? str(fd, "notes")
+        : plan.mode === "update"
+          ? (schedules.find((schedule) => schedule.id === plan.updateId)?.notes ??
+            null)
+          : (current?.notes ?? null);
+
+      const row = {
+        ...base,
+        ...schedulePattern(fd, active, goal, notes),
+        effective_start_date: str(fd, "effective_start_date"),
+        effective_end_date: null,
+      };
+
+      if (plan.mode === "update" && plan.updateId != null) {
+        await writeSchedule(supabase, plan.updateId, row);
+      } else {
+        await writeSchedule(supabase, null, row);
+      }
+
+      try {
+        await closeSchedulePeriods(supabase, plan.closeIds, plan.closeEnd);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Save failed";
+        return {
+          ok: false,
+          error: `The new schedule was saved, but the previous period could not be closed (${message}). Save again to finish. Averages already use the new schedule from its start date.`,
+        };
+      }
+    } else {
+      if (id == null) {
+        return { ok: false, error: "Schedule not found" };
+      }
+      const existing = schedules.find((schedule) => schedule.id === id);
+      if (!existing) return { ok: false, error: "Schedule not found" };
+
+      const start = fd.has("dates_present")
+        ? str(fd, "effective_start_date")
+        : existing.effective_start_date;
+      const end = fd.has("dates_present")
+        ? str(fd, "effective_end_date")
+        : existing.effective_end_date;
+      const notes = fd.has("notes_present") ? str(fd, "notes") : existing.notes;
+      const windowError = validateScheduleWindow(
+        { effective_start_date: start, effective_end_date: end },
+        schedules.filter((schedule) => schedule.id !== id)
+      );
+      if (windowError) return { ok: false, error: windowError };
+
+      await writeSchedule(supabase, id, {
+        ...base,
+        ...schedulePattern(fd, active, goal, notes),
+        effective_start_date: start,
+        effective_end_date: end,
+      });
+    }
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Load failed",
+      error: err instanceof Error ? err.message : "Save failed",
     };
   }
 
-  const daily = str(fd, "daily_goal");
-  const row: Record<string, unknown> = {
-    person,
-    monday: bool(fd, "monday"),
-    tuesday: bool(fd, "tuesday"),
-    wednesday: bool(fd, "wednesday"),
-    thursday: bool(fd, "thursday"),
-    friday: bool(fd, "friday"),
-    saturday: bool(fd, "saturday"),
-    sunday: bool(fd, "sunday"),
-    daily_goal: daily ? Number(daily) : 6.5,
-    include_in_operations_kpi: active
-      ? bool(fd, "include_in_operations_kpi")
-      : false,
-    // Permanent setting — no date window.
-    effective_start_date: null,
-    effective_end_date: null,
-  };
-
-  return save("employee_schedules", id, row);
+  revalidateAll();
+  return { ok: true };
 }
 
 export async function deleteSchedule(fd: FormData): Promise<ActionResult> {
   const denied = await ensureAuth(fd);
   if (denied) return denied;
-  return remove("employee_schedules", idOf(fd));
+
+  const id = idOf(fd);
+  if (!id) return { ok: false, error: "Missing id" };
+
+  try {
+    const supabase = writeClient();
+    const { data: row, error: rowError } = await supabase
+      .from("employee_schedules")
+      .select("id, person")
+      .eq("id", id)
+      .maybeSingle();
+    if (rowError) throw new Error(rowError.message);
+    if (!row?.person) return { ok: false, error: "Schedule not found" };
+
+    const { schedules } = await loadScheduleContext(supabase, row.person as string);
+    const plan = planScheduleDelete(schedules, id);
+    if (!plan.ok) return { ok: false, error: plan.error };
+
+    if (plan.reopen) {
+      const { error: reopenError } = await supabase
+        .from("employee_schedules")
+        .update({ effective_end_date: null })
+        .eq("id", plan.reopen.id);
+      if (reopenError) throw new Error(reopenError.message);
+    }
+
+    const { error: deleteError } = await supabase
+      .from("employee_schedules")
+      .delete()
+      .eq("id", id);
+    if (deleteError) {
+      if (plan.reopen) {
+        await supabase
+          .from("employee_schedules")
+          .update({ effective_end_date: plan.reopen.previousEnd })
+          .eq("id", plan.reopen.id);
+      }
+      throw new Error(deleteError.message);
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Delete failed",
+    };
+  }
+
+  revalidateAll();
+  return { ok: true };
 }
 
 // --- Time off --------------------------------------------------------------

@@ -18,7 +18,7 @@ const PERSON_ENTRY_COLUMNS =
   "id,person,date,department,role,task,type,billable,hours,comments,created_at,is_billable";
 
 const DAILY_TRACKING_COLUMNS =
-  "person,date,tracked_hours,daily_goal,counted_working_day";
+  "person,date,tracked_hours,daily_goal,include_in_operations_kpi,scheduled_to_work,is_stat_holiday,is_time_off,counted_working_day";
 
 /** All clean time entries for in-app filtering + aggregation. */
 export function getEntries(): Promise<EntryRow[]> {

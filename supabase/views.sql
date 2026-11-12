@@ -36,6 +36,11 @@ daily_actuals AS (
   FROM time_entries
   GROUP BY time_entries.person, time_entries.date
 ),
+-- Schedule in effect on that date. NULL effective_start_date covers the
+-- beginning of tracking; NULL effective_end_date is the open current period.
+-- A single legacy row with both dates NULL still applies to every day.
+-- Overlaps prefer the later start, then created_at, then id — same order as
+-- scheduleForDate() in lib/schedules.ts.
 scheduled AS (
   SELECT ed.person,
          ed.date,
@@ -56,7 +61,11 @@ scheduled AS (
     SELECT s_1.*
     FROM employee_schedules s_1
     WHERE s_1.person = ed.person
-    ORDER BY s_1.created_at DESC NULLS LAST, s_1.id DESC
+      AND (s_1.effective_start_date IS NULL OR ed.date >= s_1.effective_start_date)
+      AND (s_1.effective_end_date IS NULL OR ed.date <= s_1.effective_end_date)
+    ORDER BY s_1.effective_start_date DESC NULLS LAST,
+             s_1.created_at DESC NULLS LAST,
+             s_1.id DESC
     LIMIT 1
   ) s ON true
 ),
@@ -102,8 +111,11 @@ FROM labelled;
 
 -- ---------------------------------------------------------------------------
 -- Operations / People consistency KPIs (active employees)
--- Status thresholds use each person's schedule daily_goal.
--- No gap_to_goal. Context = schedule notes only.
+-- Inclusion, context notes, and "schedule needed" use the current open period.
+-- The average uses counted days from v_person_daily_tracking (schedule in
+-- effect each day). Status compares that average to the average daily goal
+-- of those counted days, so a new goal does not rescore earlier periods alone.
+-- No gap_to_goal. Context = current schedule notes only.
 -- ---------------------------------------------------------------------------
 
 -- DROP first when removing columns (CREATE OR REPLACE cannot drop columns).
@@ -118,7 +130,11 @@ WITH current_schedule AS (
     s.daily_goal,
     s.notes
   FROM employee_schedules s
-  ORDER BY s.person, s.created_at DESC NULLS LAST, s.id DESC
+  ORDER BY s.person,
+           (s.effective_end_date IS NULL) DESC,
+           s.effective_start_date DESC NULLS LAST,
+           s.created_at DESC NULLS LAST,
+           s.id DESC
 ),
 eligible AS (
   SELECT e_1.person,
@@ -156,7 +172,8 @@ totals AS (
   SELECT d.person,
          round(sum(d.tracked_hours), 2) AS tracked_hours,
          count(*) FILTER (WHERE d.counted_working_day) AS counted_working_days,
-         round(avg(d.tracked_hours) FILTER (WHERE d.counted_working_day), 2) AS avg_working_day
+         round(avg(d.tracked_hours) FILTER (WHERE d.counted_working_day), 2) AS avg_working_day,
+         round(avg(d.daily_goal) FILTER (WHERE d.counted_working_day), 2) AS applicable_goal
   FROM daily d
   GROUP BY d.person
 )
@@ -170,8 +187,8 @@ SELECT t.person,
          WHEN e.include_in_operations_kpi = false THEN 'Not included in current KPI'::text
          WHEN NULLIF(btrim(e.notes), ''::text) IS NOT NULL THEN 'Context exception'::text
          WHEN t.counted_working_days = 0 THEN 'Needs review'::text
-         WHEN t.avg_working_day >= e.daily_goal THEN 'On track'::text
-         WHEN t.avg_working_day >= (e.daily_goal - 0.5) THEN 'Close to target'::text
+         WHEN t.avg_working_day >= COALESCE(t.applicable_goal, e.daily_goal) THEN 'On track'::text
+         WHEN t.avg_working_day >= (COALESCE(t.applicable_goal, e.daily_goal) - 0.5) THEN 'Close to target'::text
          ELSE 'Needs review'::text
        END AS status,
        NULLIF(btrim(e.notes), ''::text) AS context
