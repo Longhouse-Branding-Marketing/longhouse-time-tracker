@@ -25,13 +25,6 @@ type WeekdayKey = (typeof WEEKDAYS)[number]["key"];
 const inputClass =
   "h-9 w-full rounded-md border border-line bg-card px-2.5 text-[13px] text-ink outline-none transition-colors hover:border-[#b8c7d6] focus:border-brand-600 focus:ring-3 focus:ring-brand-600/15";
 
-function initialChangeStart(schedule: EmployeeSchedule | null): string {
-  const today = todayIso();
-  if (!schedule?.effective_start_date) return today;
-  const min = addIsoDays(schedule.effective_start_date, 1);
-  return min > today ? min : today;
-}
-
 function todayIso(): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -93,7 +86,7 @@ export function scheduleFormKey(
 function periodLabel(schedule: EmployeeSchedule): string {
   const start = schedule.effective_start_date;
   const end = schedule.effective_end_date;
-  if (!start && !end) return "Since the beginning";
+  if (!start && !end) return "Since the Beginning";
   if (start && !end) return `Since ${formatDate(start)}`;
   if (!start && end) return `Beginning – ${formatDate(end)}`;
   if (start && end) return `${formatDate(start)} – ${formatDate(end)}`;
@@ -172,9 +165,8 @@ function KpiSwitch({
 }
 
 /**
- * Current work schedule plus the dated periods behind it.
- * Changing days logs a new period by default so earlier averages keep the
- * schedule that was in effect. "Apply to this period" rewrites the open row.
+ * The form saves the current schedule. Schedule History lists every period.
+ * Add Schedule starts a new period on a chosen date and leaves earlier ones.
  */
 export function PersonScheduleForm({
   person,
@@ -197,21 +189,12 @@ export function PersonScheduleForm({
   const [dailyGoal, setDailyGoal] = useState(
     schedule?.daily_goal != null ? String(schedule.daily_goal) : "6.5"
   );
-  const [changeStart, setChangeStart] = useState(() =>
-    initialChangeStart(schedule)
-  );
   const [includeInKpi, setIncludeInKpi] = useState(
     active ? (schedule?.include_in_operations_kpi ?? true) : false
   );
   const [editingId, setEditingId] = useState<number | null>(null);
-  const intentRef = useRef<"create" | "correct" | "change">("correct");
-
-  const goalNumber = dailyGoal.trim() === "" ? 6.5 : Number(dailyGoal);
-  const savedGoal = Number(schedule?.daily_goal ?? 6.5);
-  const patternDirty = schedule
-    ? WEEKDAYS.some(({ key }) => days[key] !== Boolean(schedule[key])) ||
-      goalNumber !== savedGoal
-    : false;
+  const [adding, setAdding] = useState(false);
+  const intentRef = useRef<"create" | "correct">("correct");
 
   const [saveState, save, saving] = useActionState(
     async (_previous: ActionResult | null, fd: FormData) => {
@@ -238,12 +221,6 @@ export function PersonScheduleForm({
         <input type="hidden" name="person" value={person} />
 
         <div className="space-y-5">
-          <p className="text-[13px] text-muted">
-            {schedule
-              ? `Current period · ${periodLabel(schedule)}`
-              : "No schedule yet. The first save applies to every tracked day until you log a change."}
-          </p>
-
           <div>
             <div className="lh-meta-label">Workdays</div>
             <WeekdayToggles days={days} onToggle={toggleDay} />
@@ -251,7 +228,7 @@ export function PersonScheduleForm({
 
           <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
             <label className="flex flex-col gap-1.5">
-              <span className="lh-meta-label">Daily goal</span>
+              <span className="lh-meta-label">Daily Goal</span>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -271,102 +248,50 @@ export function PersonScheduleForm({
             ) : null}
           </div>
 
-          {patternDirty && schedule ? (
-            <div className="rounded-md bg-tint px-3 py-3">
-              <label className="flex flex-col gap-1.5">
-                <span className="lh-meta-label">Change starts</span>
-                <input
-                  type="date"
-                  name="effective_start_date"
-                  value={changeStart}
-                  onChange={(event) => setChangeStart(event.target.value)}
-                  className={`${inputClass} max-w-[180px]`}
-                />
-              </label>
-              <p className="mt-2 text-[12px] leading-relaxed text-muted">
-                Days before this date keep the current schedule, so earlier
-                averages stay the same. Apply to this period only when these
-                days should replace the whole current period.
-              </p>
-            </div>
-          ) : (
-            <p className="text-[12px] leading-relaxed text-muted">
-              {schedule
-                ? "Change the workdays or daily goal to log a new period. Earlier averages keep the schedule that was in effect."
-                : "Later changes are logged as new periods and do not rewrite this one."}
-            </p>
-          )}
-
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
-            {saved && !patternDirty ? (
-              <span className="order-0 mr-auto text-[12px] font-medium text-positive">
+            {saved ? (
+              <span className="mr-auto text-[12px] font-medium text-positive">
                 Saved
               </span>
             ) : null}
             {error ? (
-              <span className="order-0 mr-auto text-[12px] text-serious">{error}</span>
+              <span className="mr-auto text-[12px] text-serious">{error}</span>
             ) : null}
             <button
               type="submit"
               name="intent"
-              value={schedule ? (patternDirty ? "change" : "correct") : "create"}
-              disabled={saving || (patternDirty && !changeStart)}
+              value={schedule ? "correct" : "create"}
+              disabled={saving}
               onClick={() => {
-                intentRef.current = schedule
-                  ? patternDirty
-                    ? "change"
-                    : "correct"
-                  : "create";
+                intentRef.current = schedule ? "correct" : "create";
               }}
-              className="order-2 h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50"
+              className="h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50"
             >
-              {saving
-                ? "Saving…"
-                : patternDirty && schedule
-                  ? "Log change"
-                  : "Save"}
+              {saving ? "Saving…" : "Save"}
             </button>
-            {patternDirty && schedule ? (
-              <button
-                type="submit"
-                name="intent"
-                value="correct"
-                disabled={saving}
-                onClick={(event) => {
-                  intentRef.current = "correct";
-                  const range = periodLabel(schedule);
-                  if (
-                    !window.confirm(
-                      `Apply these days to this period (${range})? Averages inside this period will use the new days. Log a change instead if earlier days should keep the previous schedule.`
-                    )
-                  ) {
-                    event.preventDefault();
-                  }
-                }}
-                className="order-1 h-9 rounded-md border border-line px-3 text-[13px] font-medium text-muted hover:bg-tint disabled:opacity-50"
-              >
-                Apply to this period
-              </button>
-            ) : null}
           </div>
         </div>
       </form>
 
-      {ordered.length > 0 ? (
-        <div className="border-t border-line">
-          <div className="px-5 py-3">
-            <div className="lh-meta-label">Schedule history</div>
-            <p className="mt-1 text-[12px] text-muted">
-              Averages use the schedule that was in effect on each day.
-            </p>
-          </div>
+      <div className="border-t border-line">
+        <div className="flex items-center justify-between gap-3 px-5 py-3">
+          <h3 className="lh-section-title">Schedule History</h3>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-tint"
+          >
+            Add Schedule
+          </button>
+        </div>
+        {ordered.length > 0 ? (
           <div className="lh-scroll overflow-x-auto">
             <table className="lh-table">
               <thead>
                 <tr>
                   <th>Period</th>
                   <th>Days</th>
-                  <th>Daily goal</th>
+                  <th>Daily Goal</th>
                   <th>Notes</th>
                   <th className="w-[1%] text-right"> </th>
                 </tr>
@@ -408,14 +333,11 @@ export function PersonScheduleForm({
               </tbody>
             </table>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {editing ? (
-        <EditModal
-          title={schedule?.id === editing.id ? "Edit current schedule" : "Edit schedule period"}
-          onClose={() => setEditingId(null)}
-        >
+        <EditModal title="Edit Schedule" onClose={() => setEditingId(null)}>
           <SchedulePeriodForm
             key={editing.id}
             person={person}
@@ -426,6 +348,22 @@ export function PersonScheduleForm({
             saveAction={saveAction}
             deleteAction={deleteAction}
             onDone={() => setEditingId(null)}
+          />
+        </EditModal>
+      ) : null}
+
+      {adding ? (
+        <EditModal title="Add Schedule" onClose={() => setAdding(false)}>
+          <SchedulePeriodForm
+            key="add"
+            person={person}
+            active={active}
+            entry={null}
+            isCurrent={false}
+            schedules={ordered}
+            saveAction={saveAction}
+            deleteAction={deleteAction}
+            onDone={() => setAdding(false)}
           />
         </EditModal>
       ) : null}
@@ -445,18 +383,21 @@ function SchedulePeriodForm({
 }: {
   person: string;
   active: boolean;
-  entry: EmployeeSchedule;
+  entry: EmployeeSchedule | null;
   isCurrent: boolean;
   schedules: EmployeeSchedule[];
   saveAction: SaveAction;
   deleteAction: SaveAction;
   onDone: () => void;
 }) {
+  const isNew = entry == null;
+  const source = entry ?? currentSchedule(schedules);
   const [days, setDays] = useState<Record<WeekdayKey, boolean>>(() =>
-    daysFrom(entry)
+    daysFrom(source)
   );
+  const [startDate, setStartDate] = useState(todayIso);
   const [includeInKpi, setIncludeInKpi] = useState(
-    active ? entry.include_in_operations_kpi : false
+    active ? (source?.include_in_operations_kpi ?? true) : false
   );
 
   const [saveState, save, saving] = useActionState(
@@ -481,26 +422,13 @@ function SchedulePeriodForm({
 
   return (
     <form action={save} className="px-5 py-4">
-      <input type="hidden" name="id" value={entry.id} />
+      {entry ? <input type="hidden" name="id" value={entry.id} /> : null}
       <input type="hidden" name="person" value={person} />
-      <input type="hidden" name="intent" value="correct" />
-      <input type="hidden" name="dates_present" value="1" />
+      <input type="hidden" name="intent" value={isNew ? "change" : "correct"} />
+      {entry ? <input type="hidden" name="dates_present" value="1" /> : null}
       <input type="hidden" name="notes_present" value="1" />
 
       <div className="space-y-4">
-        {isCurrent ? (
-          <p className="text-[12px] leading-relaxed text-muted">
-            This is the current period ({periodLabel(entry)}). Changing days
-            here updates every day in this period. Log a new change from the
-            schedule form if the new pattern should start later.
-          </p>
-        ) : (
-          <p className="text-[12px] leading-relaxed text-muted">
-            Edits apply only to this period. Other periods, including the
-            current schedule, stay as they are.
-          </p>
-        )}
-
         <div>
           <div className="lh-meta-label">Workdays</div>
           <WeekdayToggles
@@ -510,28 +438,42 @@ function SchedulePeriodForm({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {isNew ? (
+            <label className="flex flex-col gap-1">
+              <span className="lh-meta-label">Start Date</span>
+              <input
+                type="date"
+                name="effective_start_date"
+                required
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className={inputClass}
+              />
+            </label>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="lh-meta-label">Start Date</span>
+                <input
+                  type="date"
+                  name="effective_start_date"
+                  defaultValue={entry.effective_start_date ?? ""}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="lh-meta-label">End Date</span>
+                <input
+                  type="date"
+                  name="effective_end_date"
+                  defaultValue={entry.effective_end_date ?? ""}
+                  className={inputClass}
+                />
+              </label>
+            </>
+          )}
           <label className="flex flex-col gap-1">
-            <span className="lh-meta-label">Starts</span>
-            <input
-              type="date"
-              name="effective_start_date"
-              defaultValue={entry.effective_start_date ?? ""}
-              className={inputClass}
-            />
-            <span className="text-[12px] text-muted">Blank means the beginning of tracking.</span>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="lh-meta-label">Ends</span>
-            <input
-              type="date"
-              name="effective_end_date"
-              defaultValue={entry.effective_end_date ?? ""}
-              className={inputClass}
-            />
-            <span className="text-[12px] text-muted">Blank means this period is current.</span>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="lh-meta-label">Daily goal</span>
+            <span className="lh-meta-label">Daily Goal</span>
             <input
               type="number"
               name="daily_goal"
@@ -539,7 +481,7 @@ function SchedulePeriodForm({
               min="0"
               required
               defaultValue={
-                entry.daily_goal != null ? String(entry.daily_goal) : "6.5"
+                source?.daily_goal != null ? String(source.daily_goal) : "6.5"
               }
               className={inputClass}
             />
@@ -549,13 +491,13 @@ function SchedulePeriodForm({
             <input
               type="text"
               name="notes"
-              defaultValue={entry.notes ?? ""}
+              defaultValue={entry?.notes ?? ""}
               className={inputClass}
             />
           </label>
         </div>
 
-        {active && isCurrent ? (
+        {active && (isCurrent || isNew) ? (
           <KpiSwitch checked={includeInKpi} onChange={setIncludeInKpi} />
         ) : null}
       </div>
@@ -573,11 +515,12 @@ function SchedulePeriodForm({
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || (isNew && !startDate)}
           className="h-8 rounded-md bg-brand px-3 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving…" : isNew ? "Add Schedule" : "Save"}
         </button>
+        {entry ? (
         <button
           type="button"
           disabled={deleting}
@@ -605,6 +548,7 @@ function SchedulePeriodForm({
         >
           {deleting ? "…" : "Delete"}
         </button>
+        ) : null}
       </div>
     </form>
   );
