@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useState } from "react";
 import type { ActionResult } from "@/app/settings/actions";
 import { Badge } from "@/components/ui";
 import { formatDate } from "@/lib/formatters";
@@ -165,8 +165,8 @@ function KpiSwitch({
 }
 
 /**
- * The form saves the current schedule. Schedule History lists every period.
- * Add Schedule starts a new period on a chosen date and leaves earlier ones.
+ * Schedule History is the only schedule control. Add Schedule starts a new
+ * period. Edit changes one existing row.
  */
 export function PersonScheduleForm({
   person,
@@ -183,107 +183,22 @@ export function PersonScheduleForm({
 }) {
   const ordered = sortSchedules(schedules);
   const schedule = currentSchedule(ordered);
-  const [days, setDays] = useState<Record<WeekdayKey, boolean>>(() =>
-    daysFrom(schedule)
-  );
-  const [dailyGoal, setDailyGoal] = useState(
-    schedule?.daily_goal != null ? String(schedule.daily_goal) : "6.5"
-  );
-  const [includeInKpi, setIncludeInKpi] = useState(
-    active ? (schedule?.include_in_operations_kpi ?? true) : false
-  );
   const [editingId, setEditingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
-  const intentRef = useRef<"create" | "correct">("correct");
-
-  const [saveState, save, saving] = useActionState(
-    async (_previous: ActionResult | null, fd: FormData) => {
-      writeDays(fd, days);
-      writeKpi(fd, active, includeInKpi);
-      if (!fd.get("intent")) fd.set("intent", intentRef.current);
-      return saveAction(fd);
-    },
-    null
-  );
-
-  const error = saveState?.error;
-  const saved = saveState?.ok === true;
   const editing = ordered.find((row) => row.id === editingId) ?? null;
-
-  function toggleDay(key: WeekdayKey) {
-    setDays((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
 
   return (
     <div>
-      <form action={save} className="px-5 py-5">
-        {schedule ? <input type="hidden" name="id" value={schedule.id} /> : null}
-        <input type="hidden" name="person" value={person} />
-
-        <div className="space-y-5">
-          <div>
-            <div className="lh-meta-label">Workdays</div>
-            <WeekdayToggles days={days} onToggle={toggleDay} />
-          </div>
-
-          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="lh-meta-label">Daily Goal</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  name="daily_goal"
-                  step="0.5"
-                  min="0"
-                  value={dailyGoal}
-                  onChange={(event) => setDailyGoal(event.target.value)}
-                  className="h-9 w-[88px] rounded-md border border-line bg-card px-2.5 text-[13px] text-ink outline-none transition-colors hover:border-[#b8c7d6] focus:border-brand-600 focus:ring-3 focus:ring-brand-600/15"
-                />
-                <span className="text-[13px] text-muted">hours / day</span>
-              </div>
-            </label>
-
-            {active ? (
-              <KpiSwitch checked={includeInKpi} onChange={setIncludeInKpi} />
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
-            {saved ? (
-              <span className="mr-auto text-[12px] font-medium text-positive">
-                Saved
-              </span>
-            ) : null}
-            {error ? (
-              <span className="mr-auto text-[12px] text-serious">{error}</span>
-            ) : null}
-            <button
-              type="submit"
-              name="intent"
-              value={schedule ? "correct" : "create"}
-              disabled={saving}
-              onClick={() => {
-                intentRef.current = schedule ? "correct" : "create";
-              }}
-              className="h-9 rounded-md bg-brand px-4 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      <div className="border-t border-line">
-        <div className="flex items-center justify-between gap-3 px-5 py-3">
-          <h3 className="lh-section-title">Schedule History</h3>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-md border border-line bg-card px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-tint"
-          >
-            Add Schedule
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+        <h2 className="lh-section-title">Schedule History</h2>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-navy"
+        >
+          Add Schedule
+        </button>
+      </div>
         {ordered.length > 0 ? (
           <div className="lh-scroll overflow-x-auto">
             <table className="lh-table">
@@ -334,7 +249,6 @@ export function PersonScheduleForm({
             </table>
           </div>
         ) : null}
-      </div>
 
       {editing ? (
         <EditModal title="Edit Schedule" onClose={() => setEditingId(null)}>

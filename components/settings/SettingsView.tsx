@@ -305,7 +305,7 @@ export function SettingsView({
 
               {selectedEmployee && !addingEmployee ? (
                 <>
-                  <Panel title="Work Schedule" noBodyPadding>
+                  <Panel noBodyPadding>
                     <PersonScheduleForm
                       key={scheduleFormKey(
                         selectedEmployee.person,
