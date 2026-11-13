@@ -38,9 +38,11 @@ export function computeSummary(rows: EntryRow[]): Summary {
  * Average hours per counted working day for the current filter scope.
  *
  * Mirrors `v_operations_kpi`: only days flagged `counted_working_day` count
- * (scheduled workdays minus holidays / time-off). When department/role/task/
- * type filters are active, both numerator and denominator use only counted
- * days that have filtered hours > 0.
+ * (scheduled workdays minus holidays / time-off). The view flags each date
+ * with the schedule in effect that day, so changing today's schedule does not
+ * add earlier off-days to this average. When department/role/task/type filters
+ * are active, both numerator and denominator use only counted days that have
+ * filtered hours > 0.
  */
 export function computeWorkingDayAvg(
   rows: EntryRow[],

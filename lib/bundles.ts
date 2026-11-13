@@ -10,6 +10,7 @@ import {
   getTimeOff,
 } from "./data";
 import { memoryCached } from "./memory-cache";
+import { applyScheduleHistory } from "./schedules";
 import { hasSupabaseServiceRole } from "./supabase";
 import type {
   Employee,
@@ -53,14 +54,22 @@ export type SettingsBundle = {
  * `bustMemoryCache()` whenever `revalidateTag(TIME_TRACKING_TAG)` runs.
  */
 export async function getDashboardBundle(): Promise<DashboardBundle> {
-  return memoryCached("dashboard-bundle-v7", async () => {
-    const [entries, employees, kpis, dailyTracking] = await Promise.all([
+  return memoryCached("dashboard-bundle-v8", async () => {
+    const [entries, employees, kpis, dailyTracking, schedules] = await Promise.all([
       getEntries(),
       getEmployees(),
       getOperationsKpis(),
       getPersonDailyTracking(),
+      getSchedules(),
     ]);
-    return { entries, employees, kpis, dailyTracking };
+    return {
+      entries,
+      employees,
+      kpis,
+      // Use each period's weekdays even if the database view is still on the
+      // latest-schedule-only definition. Holiday and time-off flags come from the view.
+      dailyTracking: applyScheduleHistory(dailyTracking, schedules),
+    };
   });
 }
 

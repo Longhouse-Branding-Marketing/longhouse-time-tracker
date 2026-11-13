@@ -8,7 +8,10 @@ import { EditModal } from "./EditModal";
 import { TableEditor, type FieldDef } from "./TableEditor";
 import { PersonProfileForm } from "./PersonProfileForm";
 import { PersonTimeOffTable } from "./PersonTimeOffTable";
-import { PersonScheduleForm } from "./PersonScheduleForm";
+import {
+  PersonScheduleForm,
+  scheduleFormKey,
+} from "./PersonScheduleForm";
 import type { ActionResult } from "@/app/settings/actions";
 import { formatDate } from "@/lib/formatters";
 import type {
@@ -55,6 +58,7 @@ export function SettingsView({
   saveEmployee,
   deleteEmployee,
   saveSchedule,
+  deleteSchedule,
   saveTimeOff,
   deleteTimeOff,
   saveHoliday,
@@ -68,6 +72,7 @@ export function SettingsView({
   saveEmployee: SaveAction;
   deleteEmployee: SaveAction;
   saveSchedule: SaveAction;
+  deleteSchedule: SaveAction;
   saveTimeOff: SaveAction;
   deleteTimeOff: SaveAction;
   saveHoliday: SaveAction;
@@ -144,10 +149,6 @@ export function SettingsView({
   const personSchedules = selectedEmployee
     ? schedules.filter((schedule) => schedule.person === selectedEmployee.person)
     : [];
-  const currentSchedule =
-    personSchedules
-      .slice()
-      .sort((a, b) => b.id - a.id)[0] ?? null;
   const personTimeOff = selectedEmployee
     ? timeOff.filter((entry) => entry.person === selectedEmployee.person)
     : [];
@@ -306,11 +307,16 @@ export function SettingsView({
                 <>
                   <Panel title="Work Schedule" noBodyPadding>
                     <PersonScheduleForm
-                      key={`${selectedEmployee.person}-${selectedEmployee.active}-${currentSchedule?.id ?? "new"}`}
+                      key={scheduleFormKey(
+                        selectedEmployee.person,
+                        selectedEmployee.active,
+                        personSchedules
+                      )}
                       person={selectedEmployee.person}
                       active={selectedEmployee.active}
-                      schedule={currentSchedule}
+                      schedules={personSchedules}
                       saveAction={saveSchedule}
+                      deleteAction={deleteSchedule}
                     />
                   </Panel>
 

@@ -93,8 +93,11 @@ export interface Employee {
 export interface EmployeeSchedule {
   id: number;
   person: string;
+  /** First day this period applies. Null covers the beginning of tracking. */
   effective_start_date: string | null;
+  /** Last day this period applies. Null is the current open-ended period. */
   effective_end_date: string | null;
+  created_at?: string | null;
   monday: boolean;
   tuesday: boolean;
   wednesday: boolean;

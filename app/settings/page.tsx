@@ -15,6 +15,7 @@ import type { ActionResult } from "@/app/settings/actions";
 import {
   deleteEmployee,
   deleteHoliday,
+  deleteSchedule,
   deleteTimeOff,
   saveEmployee,
   saveHoliday,
@@ -65,6 +66,7 @@ export default function SettingsPage() {
         saveEmployee={withRefetch(saveEmployee, appendAuth)}
         deleteEmployee={withRefetch(deleteEmployee, appendAuth)}
         saveSchedule={withRefetch(saveSchedule, appendAuth)}
+        deleteSchedule={withRefetch(deleteSchedule, appendAuth)}
         saveTimeOff={withRefetch(saveTimeOff, appendAuth)}
         deleteTimeOff={withRefetch(deleteTimeOff, appendAuth)}
         saveHoliday={withRefetch(saveHoliday, appendAuth)}
