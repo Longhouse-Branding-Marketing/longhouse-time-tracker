@@ -84,10 +84,10 @@ export function TypeBreakdown({ rows }: { rows: EntryRow[] }) {
       : total;
 
   const panelLabel = selectedTask
-    ? "Task"
+    ? "Original Task"
     : selectedType
-      ? "Task"
-      : "Task Type";
+      ? "Original Task"
+      : "Activity Type";
 
   const panelItems: Slice[] = selectedTask
     ? tasks.filter((t) => t.name === selectedTask)

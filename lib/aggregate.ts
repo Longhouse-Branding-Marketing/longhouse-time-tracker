@@ -623,7 +623,7 @@ export interface HierarchyNode {
 }
 
 /**
- * Build a Department -> Role -> Task tree of tracked hours for the sunburst.
+ * Build a Department -> Role -> Activity Type tree of tracked hours for the sunburst.
  * Missing department/role/task fall back to "Unspecified" so every hour is
  * included and the root total matches `computeSummary`. Leaf values keep full
  * precision — round only when formatting for display.
@@ -636,7 +636,7 @@ export function computeHierarchy(
   for (const row of rows) {
     const dept = row.department?.trim() || "Unspecified";
     const role = row.role?.trim() || "Unspecified";
-    const task = row.task?.trim() || "Unspecified";
+    const task = row.type?.trim() || "Unspecified";
     const roles = depts.get(dept) ?? new Map();
     const tasks = roles.get(role) ?? new Map<string, number>();
     tasks.set(task, (tasks.get(task) ?? 0) + n(row.hours));
