@@ -8,6 +8,7 @@ import {
   BugIcon,
   ClockIcon,
   GearSixIcon,
+  ListChecksIcon,
   LightbulbIcon,
   SignOutIcon,
   UploadSimpleIcon,
@@ -32,6 +33,7 @@ import { Avatar } from "@/components/ui";
 const NAV = [
   { href: "/", label: "Time Dashboard", Icon: ClockIcon },
   { href: "/people", label: "People", Icon: UsersThreeIcon },
+  { href: "/review", label: "Review", Icon: ListChecksIcon },
   { href: "/settings", label: "Settings", Icon: GearSixIcon },
 ] as const;
 

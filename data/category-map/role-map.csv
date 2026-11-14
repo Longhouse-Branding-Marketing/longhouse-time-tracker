@@ -1,0 +1,72 @@
+Table 1
+old_role_id,old_department,old_department_memtime_name,old_role,old_task_rows,new_department,new_role,status,new_role_verified_live,decided_by,decided_on,notes
+OR001,Branding & Graphic Design,Branding & Graphic Design (old),Branding Specialist,21,Branding & Graphic Design,Branding Specialist,confirmed,no,,,Same role exists in new template.
+OR002,Branding & Graphic Design,Branding & Graphic Design (old),Copywriter,1,Branding & Graphic Design,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR003,Branding & Graphic Design,Branding & Graphic Design (old),Department Manager,18,Branding & Graphic Design,Department Manager,confirmed,no,,,Same role exists in new template.
+OR004,Branding & Graphic Design,Branding & Graphic Design (old),Graphic Design Specialist,17,Branding & Graphic Design,Graphic Design Specialist,confirmed,no,,,Same role exists in new template.
+OR005,Branding & Graphic Design,Branding & Graphic Design (old),Operations Manager,9,Branding & Graphic Design,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR006,Branding & Graphic Design,Branding & Graphic Design (old),Results Manager,21,Branding & Graphic Design,Results Manager,confirmed,no,,,Same role exists in new template.
+OR007,Digital Advertising,Digital Advertising (old),Copywriter,2,Advertising,Specialist,confirmed,yes,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR008,Digital Advertising,Digital Advertising (old),Department Head,30,Advertising,Department Manager,confirmed,yes,,,"Agreed merge of Department Head + Department Manager; live template label is ""Department Manager""."
+OR009,Digital Advertising,Digital Advertising (old),Graphic Designer,2,Advertising,Graphic Design Specialist,confirmed,yes,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR010,Digital Advertising,Digital Advertising (old),Operations Manager,12,Advertising,Operations Manager,confirmed,yes,,,Same role exists in new template.
+OR011,Digital Advertising,Digital Advertising (old),Results Manager,30,Advertising,Results Manager,confirmed,yes,,,Same role exists in new template.
+OR012,Digital Advertising,Digital Advertising (old),Specialist,22,Advertising,Specialist,confirmed,yes,,,Same role exists in new template.
+OR013,Digital Advertising,Digital Advertising (old),Website Maintenance,1,Advertising,Web Maintenance Specialist,confirmed,yes,Benton,2026-11-13,Confirmed: Website Maintenance -> Web Maintenance Specialist. (was: Old maintenance role -> Web Maintenance Specialist (exists in every new department).)
+OR014,Operations,Operations (old),COO,37,Operations,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR015,Operations,Operations (old),CTO,4,Operations,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR016,Operations,Operations (old),Copywriter,1,Operations,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR017,Operations,Operations (old),Handyman,1,People & Culture,Office Administrator,confirmed,no,Benton,2026-11-13,"Moves from Operations to People & Culture; new role name, not verified in Memtime. (was: Assistant suggested Handyman -> Office Admin, but no Office Admin role seen in new template.)"
+OR018,Operations,Operations (old),Operations Manager,38,Operations,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR019,Operations,Operations (old),Team,19,Operations,Specialist,confirmed,no,Benton,2026-11-13,Old role Team becomes Specialist in all departments. (was: No Team role in new template; Benton said team items use person's default role + Team activity types. Historic rows have no person-specific role; department rule for company-wide team time undecided.)
+OR020,People & Culture,People & Culture (old),CTO,3,People & Culture,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR021,People & Culture,People & Culture (old),Events Committee,4,People & Culture,Specialist,confirmed,no,Benton,2026-11-13,Decided: Events Committee -> Specialist. (was: No Events Committee role in new template; same issue as Team.)
+OR022,People & Culture,People & Culture (old),HR Coordinator,14,People & Culture,People & Culture Manager,confirmed,no,Benton,2026-11-13,"New role name; not verified in Memtime. (was: Assistant said ""HR Coordinator -> the People & Culture role"" but no such role name is in the template seen live.)"
+OR023,People & Culture,People & Culture (old),Office Administrator,2,People & Culture,Office Administrator,confirmed,no,Benton,2026-11-13,New role name; not verified in Memtime. (was: No Office Admin role seen in new template.)
+OR024,People & Culture,People & Culture (old),Operations Manager,2,People & Culture,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR025,People & Culture,People & Culture (old),Team,2,People & Culture,Specialist,confirmed,no,Benton,2026-11-13,Old role Team becomes Specialist in all departments. (was: No Team role in new template; Benton said team items use person's default role + Team activity types. Historic rows have no person-specific role; department rule for company-wide team time undecided.)
+OR026,Photo & Video,Photo & Video (old),Results Manager,4,Photo & Video,Results Manager,confirmed,no,,,Same role exists in new template.
+OR027,Photo & Video,Photo & Video (old),Videographer / Photographer,3,Photo & Video,Specialist,confirmed,no,Benton,2026-11-13,"Confirmed: Videographer / Photographer -> Specialist. (was: Fold-in stated by assistant, not contradicted by Benton.)"
+OR028,Public Relations,Public Relations (old),COO,1,Public Relations,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR029,Public Relations,Public Relations (old),Copywriter,4,Public Relations,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR030,Public Relations,Public Relations (old),Department Head,4,Public Relations,Department Manager,confirmed,no,,,"Agreed merge of Department Head + Department Manager; live template label is ""Department Manager""."
+OR031,Public Relations,Public Relations (old),Graphic Designer,2,Public Relations,Graphic Design Specialist,confirmed,no,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR032,Public Relations,Public Relations (old),Operations Manager,6,Public Relations,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR033,Public Relations,Public Relations (old),Results Manager,5,Public Relations,Results Manager,confirmed,no,,,Same role exists in new template.
+OR034,Public Relations,Public Relations (old),Specialist,12,Public Relations,Specialist,confirmed,no,,,Same role exists in new template.
+OR035,Sales,Sales (old),COO,4,Sales,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR036,Sales,Sales (old),CTO,1,Sales,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR037,Sales,Sales (old),Copywriter,4,Sales,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR038,Sales,Sales (old),Graphic Designer,5,Sales,Graphic Design Specialist,confirmed,no,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR039,Sales,Sales (old),Growth Consultant,29,Sales,Growth Consultant,confirmed,no,,,"Growth Consultant kept in Sales only (Benton, Nov 13 2:30 PM)."
+OR040,Sales,Sales (old),Operations Manager,17,Sales,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR041,Sales,Sales (old),Sales Assistant,4,Sales,Growth Consultant,confirmed,no,Benton,2026-11-13,Decided: Sales Assistant -> Growth Consultant. (was: Could be Specialist or Growth Consultant.)
+OR042,Sales,Sales (old),Sales Lead,2,Sales,Growth Consultant,confirmed,no,Benton,2026-11-13,"Decided: Sales Lead -> Growth Consultant. (was: Could be Department Manager, Growth Consultant or Specialist.)"
+OR043,Sales,Sales (old),Team,3,Sales,Specialist,confirmed,no,Benton,2026-11-13,Old role Team becomes Specialist in all departments. (was: No Team role in new template; Benton said team items use person's default role + Team activity types. Historic rows have no person-specific role; department rule for company-wide team time undecided.)
+OR044,SEO,SEO (old),Copywriter,6,SEO,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR045,SEO,SEO (old),Department Manager,15,SEO,Department Manager,confirmed,no,,,Same role exists in new template.
+OR046,SEO,SEO (old),Graphic Designer,1,SEO,Graphic Design Specialist,confirmed,no,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR047,SEO,SEO (old),Operations Manager,9,SEO,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR048,SEO,SEO (old),Results Manager,26,SEO,Results Manager,confirmed,no,,,Same role exists in new template.
+OR049,SEO,SEO (old),Specialist,22,SEO,Specialist,confirmed,no,,,Same role exists in new template.
+OR050,SEO,SEO (old),Web Maintenance,4,SEO,Web Maintenance Specialist,confirmed,no,Benton,2026-11-13,Confirmed: Web Maintenance -> Web Maintenance Specialist. (was: Old maintenance role -> Web Maintenance Specialist (exists in every new department).)
+OR051,Social Media,Social Media (old),Content Creator,1,Social Media,Specialist,confirmed,no,Benton,2026-11-13,"Confirmed: Content Creator -> Specialist. (was: Fold-in stated by assistant, not contradicted by Benton.)"
+OR052,Social Media,Social Media (old),Copywriter,3,Social Media,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR053,Social Media,Social Media (old),Department Manager,17,Social Media,Department Manager,confirmed,no,,,Same role exists in new template.
+OR054,Social Media,Social Media (old),Graphic Designer,1,Social Media,Graphic Design Specialist,confirmed,no,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR055,Social Media,Social Media (old),Operations Manager,5,Social Media,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR056,Social Media,Social Media (old),Results Manager,17,Social Media,Results Manager,confirmed,no,,,Same role exists in new template.
+OR057,Social Media,Social Media (old),Specialist,7,Social Media,Specialist,confirmed,no,,,Same role exists in new template.
+OR058,Social Media,Social Media (old),Team,1,Social Media,Specialist,confirmed,no,Benton,2026-11-13,Old role Team becomes Specialist in all departments. (was: No Team role in new template; Benton said team items use person's default role + Team activity types. Historic rows have no person-specific role; department rule for company-wide team time undecided.)
+OR059,Web Design,Web Design (old),COO,1,Web Design,Executive,confirmed,no,,,Executive replaces COO and CTO (agreed).
+OR060,Web Design,Web Design (old),Copywriter,3,Web Design,Specialist,confirmed,no,,,Benton agreed Copywriter falls under Specialist (copywriting is an Activity Type).
+OR061,Web Design,Web Design (old),Department Head,15,Web Design,Department Manager,confirmed,no,,,"Agreed merge of Department Head + Department Manager; live template label is ""Department Manager""."
+OR062,Web Design,Web Design (old),Graphic Designer,4,Web Design,Graphic Design Specialist,confirmed,no,Benton,2026-11-13,"Decided: Graphic Designer -> Graphic Design Specialist. (was: Graphic Design Specialist exists in every new dept template, but earlier advice folded Graphic Designer into Specialist.)"
+OR063,Web Design,Web Design (old),Operations Manager,10,Web Design,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR064,Web Design,Web Design (old),P&C Manager,1,People & Culture,People & Culture Manager,confirmed,no,Benton,2026-11-13,"Moves from Web Design to People & Culture; new role name, not verified in Memtime. (was: Under Web Design; flagged as likely a mistake. Could move to People & Culture / Department Manager.)"
+OR065,Web Design,Web Design (old),Results Manager,20,Web Design,Results Manager,confirmed,no,,,Same role exists in new template.
+OR066,Web Design,Web Design (old),Specialist,17,Web Design,Specialist,confirmed,no,,,Same role exists in new template.
+OR067,Website Maintenance,Website Maintenance (old),Department Head,6,Website Maintenance,Department Manager,confirmed,no,,,"Agreed merge of Department Head + Department Manager; live template label is ""Department Manager""."
+OR068,Website Maintenance,Website Maintenance (old),Operations Manager,2,Website Maintenance,Operations Manager,confirmed,no,,,Same role exists in new template.
+OR069,Website Maintenance,Website Maintenance (old),Results Manager,9,Website Maintenance,Results Manager,confirmed,no,,,Same role exists in new template.
+OR070,Website Maintenance,Website Maintenance (old),Specialist,4,Website Maintenance,Specialist,confirmed,no,,,Same role exists in new template.

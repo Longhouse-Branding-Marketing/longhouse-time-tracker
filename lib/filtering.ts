@@ -75,7 +75,6 @@ export function applyFilters<T extends FilterableEntry>(
   const people = new Set(f.people);
   const depts = new Set(f.departments);
   const roles = new Set(f.roles);
-  const tasks = new Set(f.tasks);
   const types = new Set(f.types);
 
   return rows.filter((r) => {
@@ -84,7 +83,6 @@ export function applyFilters<T extends FilterableEntry>(
     if (people.size && !people.has(r.person)) return false;
     if (depts.size && !(r.department && depts.has(r.department))) return false;
     if (roles.size && !(r.role && roles.has(r.role))) return false;
-    if (tasks.size && !(r.task && tasks.has(r.task))) return false;
     if (types.size && !(r.type && types.has(r.type))) return false;
     return true;
   });

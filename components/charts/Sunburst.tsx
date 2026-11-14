@@ -28,7 +28,7 @@ interface SideItem {
   node: Node | null;
 }
 
-const DEPTH_LABEL = ["", "Department", "Role", "Task"] as const;
+const DEPTH_LABEL = ["", "Department", "Role", "Activity Type"] as const;
 const ANIM_MS = 750;
 const CORNER_RADIUS = 5;
 
@@ -291,8 +291,8 @@ export function Sunburst({
     focus.depth === 0
       ? "Department"
       : !focus.children?.length
-        ? (DEPTH_LABEL[Math.min(focus.depth, 3)] ?? "Task")
-        : (DEPTH_LABEL[Math.min(focus.depth + 1, 3)] ?? "Task");
+        ? (DEPTH_LABEL[Math.min(focus.depth, 3)] ?? "Activity Type")
+        : (DEPTH_LABEL[Math.min(focus.depth + 1, 3)] ?? "Activity Type");
 
   const crumbs = focus.depth > 0 ? breadcrumb(focus) : [];
   const centerHours = focus.value ?? chart.total;

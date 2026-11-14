@@ -92,8 +92,9 @@ function findAllCols(headers: string[], name: string): number[] {
 
 /**
  * Resolve Memtime columns by header name, preserving "Booked on" columns by
- * position (1st→department, 2nd→role, 3rd→task). The 3rd Booked on and Activity
- * Type columns are optional — some line items leave them blank.
+ * position (1st→department, 2nd→role, 3rd→task). Two Booked on columns plus
+ * Activity Type is the new shape: task stays empty and Activity Type is stored
+ * as type. Three Booked on columns keep the old task.
  */
 export function resolveMemtimeColumns(
   headers: string[]

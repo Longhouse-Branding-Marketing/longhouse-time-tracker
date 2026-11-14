@@ -223,8 +223,8 @@ export function PersonDetailPanel({
                       <th className="text-right">Hours</th>
                       <th>Department</th>
                       <th>Role</th>
-                      <th>Task</th>
-                      <th>Type</th>
+                      <th>Activity Type</th>
+                      <th>Original Task</th>
                       <th>Billable</th>
                       <th>Comments</th>
                     </tr>
@@ -243,8 +243,8 @@ export function PersonDetailPanel({
                         </td>
                         <td>{row.department || "—"}</td>
                         <td>{row.role || "—"}</td>
-                        <td>{row.task || "—"}</td>
                         <td>{row.type || "—"}</td>
+                        <td>{row.raw_task || row.task || "—"}</td>
                         <td>{row.billable || "—"}</td>
                         <td className="max-w-[220px]">
                           <span className="line-clamp-2 text-[12px] text-muted">

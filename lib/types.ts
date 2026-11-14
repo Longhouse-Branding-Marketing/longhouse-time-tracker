@@ -23,6 +23,12 @@ export interface EntryRow {
   year_month: string; // "YYYY-MM"
   /** Memtime time range, e.g. "9:45 a.m. - 11:35 a.m." */
   source_time_range: string | null;
+  /** Logged names before the category crosswalk. Present after mapping. */
+  raw_department?: string | null;
+  raw_role?: string | null;
+  raw_task?: string | null;
+  raw_type?: string | null;
+  mapping_status?: "mapped" | "new_structure" | "unmapped";
 }
 
 /** Full entry row for the person detail panel (includes comments + created_at). */
@@ -39,6 +45,11 @@ export interface PersonEntryDetail {
   comments: string | null;
   created_at: string | null;
   is_billable: boolean | null;
+  raw_department?: string | null;
+  raw_role?: string | null;
+  raw_task?: string | null;
+  raw_type?: string | null;
+  mapping_status?: "mapped" | "new_structure" | "unmapped";
 }
 
 export interface HomeSummary {

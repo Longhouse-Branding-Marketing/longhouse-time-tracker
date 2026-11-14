@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyCategoryMapToEntries } from "@/lib/categoryMap";
 import { getEmployee, getOperationsKpis, getPersonEntries } from "@/lib/data";
 import {
   HubAccessError,
@@ -21,7 +22,12 @@ export async function GET(request: Request) {
 
     const kpi = kpis.find((row) => row.person === person) ?? null;
 
-    return NextResponse.json({ person, employee, kpi, entries });
+    return NextResponse.json({
+      person,
+      employee,
+      kpi,
+      entries: applyCategoryMapToEntries(entries),
+    });
   } catch (err) {
     if (err instanceof HubAccessError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

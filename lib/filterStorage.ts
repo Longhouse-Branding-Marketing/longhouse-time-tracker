@@ -84,7 +84,7 @@ export function reconcileStoredFilters(
     people: pick(stored.people, options.people),
     departments: pick(stored.departments, options.departments),
     roles: pick(stored.roles, options.roles),
-    tasks: pick(stored.tasks, options.tasks),
+    tasks: [],
     types: pick(stored.types, options.types),
   };
 }

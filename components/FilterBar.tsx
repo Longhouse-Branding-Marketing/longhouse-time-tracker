@@ -38,7 +38,7 @@ export function FilterBar({
     people: hidden.has("person") ? [] : filters.people,
     departments: hidden.has("department") ? [] : filters.departments,
     roles: hidden.has("role") ? [] : filters.roles,
-    tasks: hidden.has("task") ? [] : filters.tasks,
+    tasks: [],
     types: hidden.has("type") ? [] : filters.types,
   };
 
@@ -75,17 +75,9 @@ export function FilterBar({
           onChange={(v) => onChange({ roles: v })}
         />
       )}
-      {hidden.has("task") ? null : (
-        <MultiSelect
-          label="Task"
-          options={options.tasks}
-          selected={filters.tasks}
-          onChange={(v) => onChange({ tasks: v })}
-        />
-      )}
       {hidden.has("type") ? null : (
         <MultiSelect
-          label="Type"
+          label="Activity Type"
           options={options.types}
           selected={filters.types}
           onChange={(v) => onChange({ types: v })}
