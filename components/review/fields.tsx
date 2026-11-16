@@ -1,7 +1,7 @@
 import type { ReviewCatalog } from "@/lib/categoryMap";
 
 export const fieldClass =
-  "h-9 w-full rounded-md border border-line bg-card px-2.5 text-[13px] text-ink outline-none transition-colors hover:border-[#b8c7d6] focus:border-brand-600 focus:ring-3 focus:ring-brand-600/15";
+  "lh-select-trigger h-8 w-full rounded-md border border-line bg-card px-2 text-[13px] text-ink outline-none";
 
 export const primaryButtonClass =
   "h-8 rounded-md bg-brand px-3 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50";

@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { XIcon } from "@phosphor-icons/react";
 import type { ActionResult } from "@/app/review/actions";
+import { FilterBar } from "@/components/FilterBar";
 import { Badge, EmptyRow, PageHeader, PageShell, Panel } from "@/components/ui";
 import {
   entryMatchesMapping,
@@ -14,6 +16,13 @@ import {
   type ReviewCatalog,
   type TaskRow,
 } from "@/lib/categoryMap";
+import {
+  applyFilters,
+  dateBounds,
+  defaultFilters,
+  extractOptions,
+  type Filters,
+} from "@/lib/filtering";
 import { formatDate, hours } from "@/lib/formatters";
 import type { EntryRow } from "@/lib/types";
 import { EntryEditor } from "./EntryEditor";
@@ -79,6 +88,11 @@ export function ReviewView({
   const [mappingFilter, setMappingFilter] = useState<MappingFilter>("Unmapped");
   const [entryFilter, setEntryFilter] = useState<EntryFilter>("All");
   const [query, setQuery] = useState("");
+  const bounds = useMemo(() => dateBounds(entries), [entries]);
+  const filterOptions = useMemo(() => extractOptions(entries), [entries]);
+  const fallbackFilters = useMemo(() => defaultFilters(bounds), [bounds]);
+  const [filters, setFilters] = useState<Filters | null>(null);
+  const activeFilters = filters ?? fallbackFilters;
   const [scope, setScope] = useState<MappingListRow | null>(null);
   const [mappingChoice, setMappingChoice] = useState<MappingListRow | null>(null);
   const [queryDismissed, setQueryDismissed] = useState(false);
@@ -86,7 +100,19 @@ export function ReviewView({
   const [markError, setMarkError] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
   const mapping = queryDismissed ? mappingChoice : (mappingChoice ?? requestedMapping);
-  const listKey = `${section}|${mappingFilter}|${entryFilter}|${query}|${scope?.key ?? ""}`;
+  const listKey = [
+    section,
+    mappingFilter,
+    entryFilter,
+    query,
+    scope?.key ?? "",
+    activeFilters.from,
+    activeFilters.to,
+    activeFilters.people.join("\0"),
+    activeFilters.departments.join("\0"),
+    activeFilters.roles.join("\0"),
+    activeFilters.types.join("\0"),
+  ].join("|");
   const [pageState, setPageState] = useState({ key: listKey, page: 0 });
   const page = pageState.key === listKey ? pageState.page : 0;
 
@@ -118,21 +144,14 @@ export function ReviewView({
   }, [mappingFilter, mappings, needle]);
 
   const visibleEntries = useMemo(() => {
-    return entries.filter((row) => {
+    return applyFilters(entries, activeFilters).filter((row) => {
       if (scope && !entryMatchesMapping(row, scope, index)) return false;
       if (entryFilter === "Unmapped" && row.mapping_status !== "unmapped") return false;
       if (entryFilter === "Exceptions" && row.mapping_status !== "override") return false;
       if (entryFilter === "Partner Review" && !isPartnerBillableReview(row)) return false;
-      return matchesQuery(needle, [
-        row.person,
-        row.department,
-        row.role,
-        row.type,
-        row.raw_task,
-        row.billable,
-      ]);
+      return true;
     });
-  }, [entries, entryFilter, index, needle, scope]);
+  }, [activeFilters, entries, entryFilter, index, scope]);
 
   const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -185,6 +204,20 @@ export function ReviewView({
         </div>
       </PageHeader>
 
+      {section === "Entries" && bounds.min ? (
+        <div className="mt-5">
+          <FilterBar
+            filters={activeFilters}
+            options={filterOptions}
+            bounds={bounds}
+            onChange={(next) =>
+              setFilters((current) => ({ ...(current ?? activeFilters), ...next }))
+            }
+            onClear={() => setFilters(defaultFilters(bounds))}
+          />
+        </div>
+      ) : null}
+
       <Panel
         title={section}
         className="mt-5"
@@ -217,18 +250,21 @@ export function ReviewView({
               <button
                 type="button"
                 onClick={() => setScope(null)}
-                className="h-8 rounded-md border border-line bg-card px-2.5 text-[13px] font-medium text-ink hover:bg-tint"
+                className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-brand-600 hover:bg-tint"
               >
-                {scope.task || "Task"} ×
+                <XIcon size={14} weight="bold" aria-hidden />
+                {scope.task || "Task"}
               </button>
             ) : null}
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label="Search"
-              placeholder="Search"
-              className="h-8 min-w-[160px] flex-1 rounded-md border border-line bg-card px-2.5 text-[13px] text-ink outline-none placeholder:text-muted focus:border-brand-600 focus:ring-3 focus:ring-brand-600/15"
-            />
+            {section === "Mappings" ? (
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Search"
+                placeholder="Search"
+                className="lh-dropdown-input h-8 min-w-[160px] flex-1 px-2.5 text-[13px] placeholder:text-muted"
+              />
+            ) : null}
             {section === "Entries" && entryFilter === "Partner Review" && visibleEntries.length > 0 ? (
               <button
                 type="button"
