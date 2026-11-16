@@ -1,15 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { clearEntryCategory, saveEntryOverride } from "@/app/review/actions";
 import { FilterBar } from "@/components/FilterBar";
+import { EntryEditor } from "@/components/review/EntryEditor";
+import { withRefetch } from "@/components/review/withRefetch";
 import { EditModal } from "@/components/settings/EditModal";
 import { Avatar, Badge, EmptyRow } from "@/components/ui";
 import { computePersonOperations } from "@/lib/aggregate";
-import { refetchApi } from "@/lib/api";
+import { refetchApi, useApiData } from "@/lib/api";
 import { applyFilters, type DateBounds, type FilterOptions, type Filters } from "@/lib/filtering";
-import { useHubAccessToken } from "@/lib/hub/HubSessionContext";
+import { useAppendHubAccessToken, useHubAccessToken } from "@/lib/hub/HubSessionContext";
 import { formatDate, hours, n, pct, statusTone } from "@/lib/formatters";
+import {
+  indexFromReview,
+  isNewStructureEntry,
+  lookupTaskMap,
+  text,
+} from "@/lib/categoryMap";
+import type { ReviewPayload } from "@/components/review/ReviewView";
 import type {
   Employee,
   OperationsKpi,
@@ -59,16 +70,34 @@ export function PersonDetailPanel({
   kpis: OperationsKpi[];
 }) {
   const accessToken = useHubAccessToken();
+  const appendAuth = useAppendHubAccessToken();
+  const router = useRouter();
+  const review = useApiData<ReviewPayload>("/api/review");
+  const [editing, setEditing] = useState<PersonEntryDetail | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadedPerson, setLoadedPerson] = useState(person);
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; message: string }
     | { status: "ready"; data: PersonPayload }
   >({ status: "loading" });
+  const actions = useMemo(
+    () => ({
+      saveEntry: withRefetch(saveEntryOverride, appendAuth),
+      clearCategory: withRefetch(clearEntryCategory, appendAuth),
+    }),
+    [appendAuth]
+  );
+
+  if (person !== loadedPerson) {
+    setLoadedPerson(person);
+    setEditing(null);
+    setState({ status: "loading" });
+  }
 
   useEffect(() => {
     if (!accessToken) return;
     let active = true;
-    setState({ status: "loading" });
 
     const url = `/api/person?person=${encodeURIComponent(person)}`;
     refetchApi<PersonPayload>(url, accessToken)
@@ -88,7 +117,7 @@ export function PersonDetailPanel({
     return () => {
       active = false;
     };
-  }, [person, accessToken]);
+  }, [person, accessToken, reloadKey]);
 
   const scopedFilters = useMemo(
     () => ({ ...filters, people: [] as string[] }),
@@ -231,7 +260,15 @@ export function PersonDetailPanel({
                   </thead>
                   <tbody>
                     {visibleEntries.map((row) => (
-                      <tr key={row.id}>
+                      <tr
+                        key={row.id}
+                        tabIndex={0}
+                        className="cursor-pointer"
+                        onClick={() => setEditing(row)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") setEditing(row);
+                        }}
+                      >
                         <td className="whitespace-nowrap tabular-nums">
                           {formatDate(row.date)}
                         </td>
@@ -259,6 +296,41 @@ export function PersonDetailPanel({
             )}
           </div>
         </div>
+      ) : null}
+      {editing && review.status === "ready" ? (
+        <EntryEditor
+          entry={editing}
+          index={indexFromReview(review.data)}
+          catalog={review.data.catalog}
+          saveAction={actions.saveEntry}
+          clearAction={actions.clearCategory}
+          onClose={() => setEditing(null)}
+          onSaved={() => setReloadKey((current) => current + 1)}
+          onEditMapping={() => {
+            const reviewIndex = indexFromReview(review.data);
+            const rawDepartment = editing.raw_department ?? editing.department;
+            const rawRole = editing.raw_role ?? editing.role;
+            const rawTask = editing.raw_task ?? editing.task;
+            const rawType = editing.raw_type ?? editing.type;
+            if (isNewStructureEntry(rawDepartment, rawType, reviewIndex)) return;
+            const rule = lookupTaskMap(rawDepartment, rawRole, rawTask, reviewIndex);
+            const href = rule
+              ? `/review?rule=${encodeURIComponent(rule.id)}`
+              : `/review?unmapped=${encodeURIComponent(`${text(rawDepartment)}\0${text(rawRole)}\0${text(rawTask)}`)}`;
+            router.push(href);
+          }}
+        />
+      ) : null}
+      {editing && review.status !== "ready" ? (
+        <EditModal title="Edit Entry" onClose={() => setEditing(null)}>
+          <div
+            className={`px-5 py-10 text-center text-[13px] ${
+              review.status === "error" ? "text-serious" : "text-muted"
+            }`}
+          >
+            {review.status === "error" ? review.message : "Loading…"}
+          </div>
+        </EditModal>
       ) : null}
     </EditModal>
   );

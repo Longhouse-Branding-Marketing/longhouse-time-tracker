@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "@phosphor-icons/react";
+
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
+
+const dialogStack: Array<{ close: () => void }> = [];
 
 /**
  * Viewport-centered settings edit popout. Closes on backdrop click or Escape
@@ -24,15 +34,17 @@ export function EditModal({
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  const [mounted, setMounted] = useState(false);
-  onCloseRef.current = onClose;
+  const mounted = useIsClient();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!mounted) return;
+
+    const dialog = { close: () => onCloseRef.current() };
+    dialogStack.push(dialog);
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -45,14 +57,16 @@ export function EditModal({
     focusable?.focus();
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCloseRef.current();
-      }
+      if (e.key !== "Escape") return;
+      if (dialogStack[dialogStack.length - 1] !== dialog) return;
+      e.preventDefault();
+      dialog.close();
     }
     document.addEventListener("keydown", onKeyDown);
 
     return () => {
+      const index = dialogStack.lastIndexOf(dialog);
+      if (index >= 0) dialogStack.splice(index, 1);
       document.body.style.overflow = prevOverflow;
       document.removeEventListener("keydown", onKeyDown);
       previouslyFocused?.focus?.();

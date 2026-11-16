@@ -28,7 +28,8 @@ export interface EntryRow {
   raw_role?: string | null;
   raw_task?: string | null;
   raw_type?: string | null;
-  mapping_status?: "mapped" | "new_structure" | "unmapped";
+  raw_billable?: string | null;
+  mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
 }
 
 /** Full entry row for the person detail panel (includes comments + created_at). */
@@ -49,7 +50,8 @@ export interface PersonEntryDetail {
   raw_role?: string | null;
   raw_task?: string | null;
   raw_type?: string | null;
-  mapping_status?: "mapped" | "new_structure" | "unmapped";
+  raw_billable?: string | null;
+  mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
 }
 
 export interface HomeSummary {

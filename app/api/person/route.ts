@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { applyCategoryMapToEntries } from "@/lib/categoryMap";
+import { getCategoryIndex, getEntryOverrides } from "@/lib/categoryMapData";
 import { getEmployee, getOperationsKpis, getPersonEntries } from "@/lib/data";
 import {
   HubAccessError,
@@ -14,10 +15,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Person is required" }, { status: 400 });
     }
 
-    const [entries, employee, kpis] = await Promise.all([
+    const [entries, employee, kpis, index, overrides] = await Promise.all([
       getPersonEntries(person),
       getEmployee(person),
       getOperationsKpis(),
+      getCategoryIndex(),
+      getEntryOverrides(),
     ]);
 
     const kpi = kpis.find((row) => row.person === person) ?? null;
@@ -26,7 +29,7 @@ export async function GET(request: Request) {
       person,
       employee,
       kpi,
-      entries: applyCategoryMapToEntries(entries),
+      entries: applyCategoryMapToEntries(entries, { index, overrides }),
     });
   } catch (err) {
     if (err instanceof HubAccessError) {
