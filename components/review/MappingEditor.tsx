@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import type { ActionResult } from "@/app/review/actions";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { EditModal } from "@/components/settings/EditModal";
 import type { MappingListRow, ReviewCatalog } from "@/lib/categoryMap";
 import { n } from "@/lib/formatters";
@@ -15,6 +16,16 @@ import {
 } from "./fields";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
+
+export type MappingSavePatch = {
+  department: string;
+  role: string;
+  task: string;
+  newDepartment: string;
+  newRole: string;
+  activityTypeId: string;
+  activityType: string;
+};
 
 function impact(row: MappingListRow): string {
   const hours = n(row.hours).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -34,7 +45,7 @@ export function MappingEditor({
   saveAction: SaveAction;
   onClose: () => void;
   onViewEntries: () => void;
-  onSaved?: () => void;
+  onSaved?: (patch: MappingSavePatch) => void;
 }) {
   const initialActivity =
     catalog.activityTypes.find((row) => row.name === mapping.activityType)?.id ?? "";
@@ -72,7 +83,16 @@ export function MappingEditor({
       setError(result.error ?? "Save failed");
       return;
     }
-    onSaved?.();
+    const activity = catalog.activityTypes.find((row) => row.id === activityId);
+    onSaved?.({
+      department: mapping.department,
+      role: mapping.role,
+      task: mapping.task,
+      newDepartment: department,
+      newRole: role,
+      activityTypeId: activityId,
+      activityType: activity?.name ?? "",
+    });
     onClose();
   }
 
@@ -125,18 +145,15 @@ export function MappingEditor({
           </label>
           <label className="flex flex-col gap-1 sm:col-span-3">
             <span className="lh-meta-label">Activity Type</span>
-            <select
+            <SearchableSelect
               value={activityId}
-              onChange={(event) => setActivityId(event.target.value)}
-              className={fieldClass}
-            >
-              <option value="">—</option>
-              {catalog.activityTypes.map((row) => (
-                <option key={row.id || row.name} value={row.id}>
-                  {row.name}
-                </option>
-              ))}
-            </select>
+              onChange={setActivityId}
+              placeholder="Search activity type…"
+              options={catalog.activityTypes.map((row) => ({
+                value: row.id,
+                label: row.name,
+              }))}
+            />
           </label>
         </div>
 

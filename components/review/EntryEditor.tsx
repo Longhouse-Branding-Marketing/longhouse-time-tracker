@@ -2,9 +2,11 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import type { ActionResult } from "@/app/review/actions";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { EditModal } from "@/components/settings/EditModal";
 import {
   isNewStructureEntry,
+  lookupTaskMap,
   ruleCategory,
   text,
   type CategoryIndex,
@@ -22,6 +24,16 @@ import {
 } from "./fields";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
+
+export type EntrySavePatch = {
+  id: number;
+  department: string | null;
+  role: string | null;
+  type: string | null;
+  billable: string | null;
+  is_billable: boolean;
+  mapping_status: "mapped" | "new_structure" | "unmapped" | "override";
+};
 
 export type EditableEntry = {
   id: number;
@@ -63,7 +75,7 @@ export function EntryEditor({
   clearAction: SaveAction;
   onClose: () => void;
   onEditMapping?: () => void;
-  onSaved?: () => void;
+  onSaved?: (patch: EntrySavePatch) => void;
 }) {
   const followed = useMemo(() => ruleCategory(entry, index), [entry, index]);
   const loggedBillable = shownBillable(entry.raw_billable ?? entry.billable);
@@ -92,13 +104,24 @@ export function EntryEditor({
     [catalog.activityTypes, activityType]
   );
 
-  async function finish(result: ActionResult) {
+  function statusWithoutOverride(): EntrySavePatch["mapping_status"] {
+    if (isNew) return "new_structure";
+    const match = lookupTaskMap(
+      entry.raw_department ?? entry.department,
+      entry.raw_role ?? entry.role,
+      entry.raw_task ?? entry.task,
+      index
+    );
+    return match ? "mapped" : "unmapped";
+  }
+
+  async function finish(result: ActionResult, patch: EntrySavePatch) {
     setPending(null);
     if (!result.ok) {
       setError(result.error ?? "Save failed");
       return;
     }
-    onSaved?.();
+    onSaved?.(patch);
     onClose();
   }
 
@@ -119,7 +142,16 @@ export function EntryEditor({
     if (billable !== loggedBillable) fd.set("billable", billable);
     setPending("save");
     setError(null);
-    await finish(await saveAction(fd));
+    const patch: EntrySavePatch = {
+      id: entry.id,
+      department: department || null,
+      role: role || null,
+      type: activityType || null,
+      billable,
+      is_billable: billable === "Billable",
+      mapping_status: sameCategory ? statusWithoutOverride() : "override",
+    };
+    await finish(await saveAction(fd), patch);
   }
 
   async function onUseMapping() {
@@ -127,7 +159,16 @@ export function EntryEditor({
     fd.set("entry_id", String(entry.id));
     setPending("clear");
     setError(null);
-    await finish(await clearAction(fd));
+    const patch: EntrySavePatch = {
+      id: entry.id,
+      department: followed.department,
+      role: followed.role,
+      type: followed.activityType,
+      billable,
+      is_billable: billable === "Billable",
+      mapping_status: statusWithoutOverride(),
+    };
+    await finish(await clearAction(fd), patch);
   }
 
   return (
@@ -192,18 +233,12 @@ export function EntryEditor({
           </label>
           <label className="flex flex-col gap-1">
             <span className="lh-meta-label">Activity Type</span>
-            <select
+            <SearchableSelect
               value={activityType}
-              onChange={(event) => setActivityType(event.target.value)}
-              className={fieldClass}
-            >
-              <option value="">—</option>
-              {activityOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              onChange={setActivityType}
+              placeholder="Search activity type…"
+              options={activityOptions.map((name) => ({ value: name, label: name }))}
+            />
           </label>
         </div>
 

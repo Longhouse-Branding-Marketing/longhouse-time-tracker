@@ -208,23 +208,25 @@ export function DateRangePicker({
         aria-expanded={open}
         aria-disabled={!hasBounds}
         data-open={open}
-        className={`lh-dropdown-trigger flex h-10 items-center gap-2 rounded-md border px-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-60 md:h-8 ${
-          fullWidth ? "w-full justify-between" : ""
+        className={`lh-dropdown-trigger flex items-center gap-2 rounded-md border touch-manipulation disabled:cursor-not-allowed disabled:opacity-60 ${
+          fullWidth
+            ? "h-12 w-full justify-between px-3.5 text-base"
+            : "h-10 px-2.5 text-[13px] md:h-8"
         }`}
       >
         <CalendarBlankIcon
-          size={16}
+          size={fullWidth ? 18 : 16}
           weight="regular"
           aria-hidden
           className="shrink-0 text-brand"
         />
-        <span className="font-medium text-ink">
+        <span className="min-w-0 flex-1 truncate font-medium text-ink">
           {hasBounds
             ? `${shortFormat(value.from)} – ${shortFormat(value.to)}`
             : "No time entries yet"}
         </span>
         <CaretDownIcon
-          size={14}
+          size={fullWidth ? 16 : 14}
           weight="bold"
           aria-hidden
           className={`shrink-0 text-muted transition-transform duration-150 ${
@@ -265,7 +267,11 @@ export function DateRangePicker({
                   key={preset.label}
                   type="button"
                   onClick={() => selectPreset(preset.range)}
-                  className={`block w-full rounded-md px-2 py-1.5 text-left text-[13px] ${
+                  className={`rounded-md touch-manipulation ${
+                    fullWidth
+                      ? "shrink-0 px-3 py-2 text-sm whitespace-nowrap"
+                      : "block w-full px-2 py-1.5 text-left text-[13px]"
+                  } ${
                     activePreset?.label === preset.label
                       ? "bg-tint font-semibold text-ink"
                       : "text-muted hover:bg-tint hover:text-ink"
