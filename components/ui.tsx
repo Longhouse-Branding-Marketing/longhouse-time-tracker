@@ -86,7 +86,7 @@ export function EmptyRow({ children }: { children: ReactNode }) {
 /** Page shell — centered content on the surface canvas. */
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto w-full max-w-[1180px] px-6 py-8 sm:px-8">{children}</div>
+    <div className="mx-auto w-full max-w-[1180px] px-4 py-4 md:px-8 md:py-8">{children}</div>
   );
 }
 
@@ -99,7 +99,7 @@ export function PageHeader({
 }) {
   return (
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
-      <h1 className="lh-page-title">{title}</h1>
+      <h1 className="lh-page-title max-md:text-[18px]">{title}</h1>
       {children ? <div className="flex items-center gap-2">{children}</div> : null}
     </div>
   );
@@ -122,7 +122,7 @@ export function StatCard({
       className={`rounded-xl border border-line bg-card px-4 py-3.5 shadow-[0_1px_2px_rgba(2,22,61,0.04)] ${className}`}
     >
       <div className="lh-section-title">{label}</div>
-      <div className="mt-1.5 font-sans text-[28px] font-normal leading-none tracking-normal tabular-nums text-accent-deep">
+      <div className="mt-1.5 font-sans text-[22px] font-normal leading-none tracking-normal tabular-nums text-accent-deep sm:text-[28px]">
         {value}
       </div>
       {sub ? <div className="mt-1.5 text-[12px] tracking-normal text-muted">{sub}</div> : null}

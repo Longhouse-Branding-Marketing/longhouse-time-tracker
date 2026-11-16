@@ -25,7 +25,7 @@ export default function RootLayout({
         <ToolAuthRoot>
           <DashboardFilterProvider>
             <Sidebar />
-            <main className="min-h-dvh min-w-0 pl-[var(--dock-gutter)]">
+            <main className="min-h-dvh min-w-0 md:pl-[var(--dock-gutter)]">
               {children}
             </main>
           </DashboardFilterProvider>

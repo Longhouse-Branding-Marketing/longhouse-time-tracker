@@ -274,6 +274,7 @@ export function ReviewView({
             filters={activeFilters}
             options={filterOptions}
             bounds={bounds}
+            extraActive={billableFilter.length > 0}
             onChange={(next) =>
               setFilters((current) => ({ ...(current ?? activeFilters), ...next }))
             }
@@ -281,12 +282,15 @@ export function ReviewView({
               setFilters(defaultFilters(bounds));
               setBillableFilter([]);
             }}
-          />
-          <MultiSelect
-            label="Billable"
-            options={BILLABLE_OPTIONS}
-            selected={billableFilter}
-            onChange={setBillableFilter}
+            extras={(fullWidth) => (
+              <MultiSelect
+                fullWidth={fullWidth}
+                label="Billable"
+                options={BILLABLE_OPTIONS}
+                selected={billableFilter}
+                onChange={setBillableFilter}
+              />
+            )}
           />
         </div>
       ) : null}

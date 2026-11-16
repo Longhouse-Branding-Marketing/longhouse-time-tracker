@@ -8,11 +8,13 @@ export function MultiSelect({
   options,
   selected,
   onChange,
+  fullWidth = false,
 }: {
   label: string;
   options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  fullWidth?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -46,14 +48,16 @@ export function MultiSelect({
     : options;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={fullWidth ? "relative w-full" : "relative"} ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
         data-open={open}
-        className={`lh-dropdown-trigger flex h-8 max-w-[180px] items-center gap-1.5 rounded-md border px-2.5 text-[13px] ${
+        className={`lh-dropdown-trigger flex h-10 items-center gap-1.5 rounded-md border px-2.5 text-[13px] md:h-8 ${
+          fullWidth ? "w-full max-w-none justify-between" : "max-w-[180px]"
+        } ${
           selected.length
             ? "border-brand-600 text-ink"
             : "text-ink"
@@ -71,7 +75,13 @@ export function MultiSelect({
         />
       </button>
       {open ? (
-        <div className="lh-dropdown-panel absolute left-0 z-30 mt-1.5 w-64 p-1.5">
+        <div
+          className={
+            fullWidth
+              ? "mt-1.5 w-full rounded-xl border border-line bg-card p-1.5"
+              : "lh-dropdown-panel absolute left-0 z-30 mt-1.5 w-64 p-1.5"
+          }
+        >
           {options.length > 8 ? (
             <input
               autoFocus
