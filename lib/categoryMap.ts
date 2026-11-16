@@ -525,6 +525,27 @@ export function indexFromReview(input: {
   });
 }
 
+/** Stable identity for a logged dept/role/task mapping rule. */
+export function taskRuleKey(
+  task: Pick<TaskRow, "oldDepartment" | "oldRole" | "oldTask">
+): string {
+  return `${task.oldDepartment}\0${task.oldRole ?? ""}\0${task.oldTask}`;
+}
+
+/**
+ * Keep optimistic local rules when a refetch still returns a stale task_map
+ * (common with process-local caches across serverless instances).
+ */
+export function mergeReviewTasks(
+  serverTasks: TaskRow[],
+  localTasks: TaskRow[]
+): TaskRow[] {
+  if (localTasks.length === 0) return serverTasks;
+  const serverKeys = new Set(serverTasks.map((task) => taskRuleKey(task)));
+  const extras = localTasks.filter((task) => !serverKeys.has(taskRuleKey(task)));
+  return extras.length === 0 ? serverTasks : [...serverTasks, ...extras];
+}
+
 export interface CatalogIssue {
   kind: string;
   name: string;

@@ -15,6 +15,8 @@ import {
   indexFromReview,
   isPartnerBillableReview,
   mappingList,
+  mergeReviewTasks,
+  taskRuleKey,
   type CatalogIssue,
   type MappingListRow,
   type ReviewCatalog,
@@ -106,13 +108,33 @@ export function ReviewView({
   const [localReview, setLocalReview] = useState(review);
   const [entriesProp, setEntriesProp] = useState(entries);
   const [reviewProp, setReviewProp] = useState(review);
-  if (entries !== entriesProp) {
-    setEntriesProp(entries);
-    setLocalEntries(entries);
-  }
-  if (review !== reviewProp) {
-    setReviewProp(review);
-    setLocalReview(review);
+  // Logged combos the user successfully mapped this session. Survives stale
+  // refetches that would otherwise put the row back in the unmapped list.
+  const [resolvedMappingKeys, setResolvedMappingKeys] = useState<string[]>([]);
+  if (entries !== entriesProp || review !== reviewProp) {
+    const nextReview =
+      review !== reviewProp
+        ? { ...review, tasks: mergeReviewTasks(review.tasks, localReview.tasks) }
+        : localReview;
+    const nextIndex = indexFromReview(nextReview);
+    const sourceEntries = entries !== entriesProp ? entries : localEntries;
+
+    if (review !== reviewProp) {
+      setReviewProp(review);
+      setLocalReview(nextReview);
+      const serverKeys = new Set(review.tasks.map((task) => taskRuleKey(task)));
+      setResolvedMappingKeys((keys) =>
+        keys.filter((key) => !serverKeys.has(key))
+      );
+    }
+    if (entries !== entriesProp) setEntriesProp(entries);
+    setLocalEntries(
+      sourceEntries.map((row) =>
+        row.mapping_status === "override"
+          ? row
+          : applyCategoryMap(row, { index: nextIndex })
+      )
+    );
   }
 
   // Former staff (Nick, Jay, Deleted User, …) stay in the DB but are excluded
@@ -293,6 +315,7 @@ export function ReviewView({
       })
       .map((row) => row.id);
 
+    const resolvedKey = mappingIdentity(patch);
     setLocalReview(nextReview);
     setLocalEntries((rows) =>
       rows.map((row) =>
@@ -301,8 +324,11 @@ export function ReviewView({
           : applyCategoryMap(row, { index: nextIndex })
       )
     );
+    setResolvedMappingKeys((keys) =>
+      keys.includes(resolvedKey) ? keys : [...keys, resolvedKey]
+    );
     pinRecentMapping({
-      key: `recent:${mappingIdentity(patch)}`,
+      key: `recent:${resolvedKey}`,
       ruleId: task.id,
       department: patch.department,
       role: patch.role,
@@ -325,11 +351,19 @@ export function ReviewView({
     () => new Set(recentMappings.map((row) => mappingIdentity(row))),
     [recentMappings]
   );
+  const resolvedMappingSet = useMemo(
+    () => new Set(resolvedMappingKeys),
+    [resolvedMappingKeys]
+  );
 
   const visibleMappings = useMemo(() => {
     const unmapped = mappings.filter((row) => {
       if (row.status !== "unmapped") return false;
-      if (recentMappingIdentities.has(mappingIdentity(row))) return false;
+      const identity = mappingIdentity(row);
+      // Saved this session — never show as unmapped again, even if a stale
+      // refetch temporarily drops the new rule from the server payload.
+      if (resolvedMappingSet.has(identity)) return false;
+      if (recentMappingIdentities.has(identity)) return false;
       return matchesQuery(needle, [
         row.department,
         row.role,
@@ -350,7 +384,13 @@ export function ReviewView({
       ])
     );
     return [...recent, ...unmapped];
-  }, [mappings, needle, recentMappingIdentities, recentMappings]);
+  }, [
+    mappings,
+    needle,
+    recentMappingIdentities,
+    recentMappings,
+    resolvedMappingSet,
+  ]);
 
   const visibleEntries = useMemo(() => {
     const matchesRow = (row: EntryRow) => {

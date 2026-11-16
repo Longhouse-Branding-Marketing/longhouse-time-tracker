@@ -8,6 +8,7 @@ import {
   isPartnerBillableReview,
   lookupTaskMap,
   mappingList,
+  mergeReviewTasks,
   unmappedGroups,
   type TaskRow,
 } from "./categoryMap.ts";
@@ -365,5 +366,47 @@ describe("category crosswalk", () => {
     assert.equal(mapped.role, "Specialist");
     assert.equal(mapped.raw_task, null);
     assert.equal(lookupTaskMap("SEO", "Copywriter", null, index)?.id, "U1");
+  });
+});
+
+describe("mergeReviewTasks", () => {
+  it("keeps optimistic local rules missing from a stale server payload", () => {
+    const server = [
+      {
+        id: "U1",
+        oldDepartment: "SEO",
+        oldDepartmentMemtime: "SEO",
+        oldRole: "Copywriter",
+        oldTask: "Blog",
+        oldTaskNormalized: "Blog",
+        newDepartment: "SEO",
+        newRole: "Specialist",
+        activityTypeId: "AT1",
+        activityType: "SEO Blog Copywriting",
+        billableType: "billable",
+        historicalBillableRule: "keep_original",
+      },
+    ];
+    const local = [
+      ...server,
+      {
+        id: "local-admin",
+        oldDepartment: "Administrative",
+        oldDepartmentMemtime: "Administrative",
+        oldRole: null,
+        oldTask: "Inbox",
+        oldTaskNormalized: "Inbox",
+        newDepartment: "Operations",
+        newRole: "Coordinator",
+        activityTypeId: "AT2",
+        activityType: "Internal Admin",
+        billableType: "non_billable",
+        historicalBillableRule: "keep_original",
+      },
+    ];
+    const merged = mergeReviewTasks(server, local);
+    assert.equal(merged.length, 2);
+    assert.equal(merged[1]?.oldDepartment, "Administrative");
+    assert.equal(mergeReviewTasks(local, local).length, 2);
   });
 });
