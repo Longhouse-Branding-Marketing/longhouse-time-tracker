@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CaretLeftIcon, CaretRightIcon, XIcon } from "@phosphor-icons/react";
 import type { ActionResult } from "@/app/review/actions";
@@ -18,6 +18,7 @@ import {
   mergeReviewTasks,
   taskRuleKey,
   type CatalogIssue,
+  type CategoryIndex,
   type MappingListRow,
   type ReviewCatalog,
   type TaskRow,
@@ -65,14 +66,18 @@ function blank(value: string | null | undefined): string {
   return text ? text : "—";
 }
 
-function mappingIdentity(row: Pick<MappingListRow, "department" | "role" | "task">): string {
-  return `${row.department}\0${row.role}\0${row.task}`;
+/** Same identity as taskRuleKey, using MappingListRow field names. */
+function mappingIdentity(
+  row: Pick<MappingListRow, "department" | "role" | "task">
+): string {
+  return taskRuleKey({
+    oldDepartment: row.department,
+    oldRole: row.role || null,
+    oldTask: row.task,
+  });
 }
 
-function matchesBillable(
-  row: EntryRow,
-  selected: string[]
-): boolean {
+function matchesBillable(row: EntryRow, selected: string[]): boolean {
   if (selected.length === 0) return true;
   return selected.some((item) => {
     if (item === "Billable Review") return isPartnerBillableReview(row);
@@ -84,6 +89,23 @@ function matchesBillable(
 function matchesQuery(query: string, values: Array<string | null | undefined>): boolean {
   if (!query) return true;
   return values.some((value) => (value ?? "").toLowerCase().includes(query));
+}
+
+function mappingQueryValues(row: MappingListRow): Array<string | null | undefined> {
+  return [
+    row.department,
+    row.role,
+    row.task,
+    row.newDepartment,
+    row.newRole,
+    row.activityType,
+  ];
+}
+
+function remapOpenEntries(rows: EntryRow[], nextIndex: CategoryIndex): EntryRow[] {
+  return rows.map((row) =>
+    row.mapping_status === "override" ? row : applyCategoryMap(row, { index: nextIndex })
+  );
 }
 
 export function ReviewView({
@@ -123,18 +145,10 @@ export function ReviewView({
       setReviewProp(review);
       setLocalReview(nextReview);
       const serverKeys = new Set(review.tasks.map((task) => taskRuleKey(task)));
-      setResolvedMappingKeys((keys) =>
-        keys.filter((key) => !serverKeys.has(key))
-      );
+      setResolvedMappingKeys((keys) => keys.filter((key) => !serverKeys.has(key)));
     }
     if (entries !== entriesProp) setEntriesProp(entries);
-    setLocalEntries(
-      sourceEntries.map((row) =>
-        row.mapping_status === "override"
-          ? row
-          : applyCategoryMap(row, { index: nextIndex })
-      )
-    );
+    setLocalEntries(remapOpenEntries(sourceEntries, nextIndex));
   }
 
   // Former staff (Nick, Jay, Deleted User, …) stay in the DB but are excluded
@@ -175,6 +189,18 @@ export function ReviewView({
   const [filters, setFilters] = useState<Filters | null>(null);
   const [billableFilter, setBillableFilter] = useState<string[]>([]);
   const activeFilters = filters ?? fallbackFilters;
+
+  useEffect(() => {
+    const recentTimers = recentMappingTimers.current;
+    const entryTimers = entryFlashTimers.current;
+    return () => {
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+      for (const timer of recentTimers.values()) window.clearTimeout(timer);
+      for (const timer of entryTimers.values()) window.clearTimeout(timer);
+      recentTimers.clear();
+      entryTimers.clear();
+    };
+  }, []);
   const comments = useMemo(() => {
     const map = new Map<number, string>();
     for (const row of localReview.comments ?? []) {
@@ -284,21 +310,14 @@ export function ReviewView({
       billableType: "",
       historicalBillableRule: "keep_original",
     };
-    const sameRule = (row: TaskRow) =>
-      row.oldDepartment === task.oldDepartment &&
-      (row.oldRole ?? "") === (task.oldRole ?? "") &&
-      row.oldTask === task.oldTask;
+    const ruleKey = taskRuleKey(task);
+    const sameRule = (row: TaskRow) => taskRuleKey(row) === ruleKey;
     const tasks = localReview.tasks.some(sameRule)
       ? localReview.tasks.map((row) => (sameRule(row) ? { ...row, ...task, id: row.id } : row))
       : [...localReview.tasks, task];
     const nextReview = { ...localReview, tasks };
     const nextIndex = indexFromReview(nextReview);
-    const prior = mappings.find(
-      (row) =>
-        row.department === patch.department &&
-        row.role === patch.role &&
-        row.task === patch.task
-    );
+    const prior = mappings.find((row) => mappingIdentity(row) === ruleKey);
     const affectedIds = rosterEntries
       .filter((row) => {
         if (row.mapping_status === "override") return false;
@@ -315,15 +334,9 @@ export function ReviewView({
       })
       .map((row) => row.id);
 
-    const resolvedKey = mappingIdentity(patch);
+    const resolvedKey = ruleKey;
     setLocalReview(nextReview);
-    setLocalEntries((rows) =>
-      rows.map((row) =>
-        row.mapping_status === "override"
-          ? row
-          : applyCategoryMap(row, { index: nextIndex })
-      )
-    );
+    setLocalEntries((rows) => remapOpenEntries(rows, nextIndex));
     setResolvedMappingKeys((keys) =>
       keys.includes(resolvedKey) ? keys : [...keys, resolvedKey]
     );
@@ -360,28 +373,15 @@ export function ReviewView({
     const unmapped = mappings.filter((row) => {
       if (row.status !== "unmapped") return false;
       const identity = mappingIdentity(row);
-      // Saved this session — never show as unmapped again, even if a stale
-      // refetch temporarily drops the new rule from the server payload.
-      if (resolvedMappingSet.has(identity)) return false;
-      if (recentMappingIdentities.has(identity)) return false;
-      return matchesQuery(needle, [
-        row.department,
-        row.role,
-        row.task,
-        row.newDepartment,
-        row.newRole,
-        row.activityType,
-      ]);
+      // Saved this session — keep out of unmapped even if a stale refetch
+      // temporarily omits the new rule from the server payload.
+      if (resolvedMappingSet.has(identity) || recentMappingIdentities.has(identity)) {
+        return false;
+      }
+      return matchesQuery(needle, mappingQueryValues(row));
     });
     const recent = recentMappings.filter((row) =>
-      matchesQuery(needle, [
-        row.department,
-        row.role,
-        row.task,
-        row.newDepartment,
-        row.newRole,
-        row.activityType,
-      ])
+      matchesQuery(needle, mappingQueryValues(row))
     );
     return [...recent, ...unmapped];
   }, [

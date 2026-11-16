@@ -88,9 +88,10 @@ export function MultiSelect({
               left: placement.left,
               // Match the trigger; only widen searchable menus so long Activity
               // Type labels stay readable without bloating Person/Department.
-              width: fullWidth
-                ? placement.width
-                : Math.max(placement.width, searchable ? 220 : placement.width),
+              width:
+                fullWidth || !searchable
+                  ? placement.width
+                  : Math.max(placement.width, 220),
               maxHeight: placement.maxHeight,
               transformOrigin: placement.openUp ? "bottom left" : "top left",
             }}
