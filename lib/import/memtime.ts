@@ -62,12 +62,20 @@ type MemtimeCols = {
   user: number;
   /** 1st→department, 2nd→role, 3rd→task (3rd optional / may be -1). */
   bookedOn: [number, number, number];
+  /**
+   * One Booked on cell holds "Department / Role" or "Department / Role / Task".
+   * A task may itself contain " / ", so only the first two segments are split off.
+   */
+  bookedOnPath: boolean;
   loggedTime: number;
   time: number;
   date: number;
   /** -1 when the Activity Type column is absent. */
   activityType: number;
+  /** -1 when Type of Logged Work is absent and Billable is present. */
   typeOfLoggedWork: number;
+  /** Yes/No column on the Time Tracking Report. Null when absent. */
+  billable: number | null;
   comment: number | null;
   status: number | null;
 };
@@ -91,10 +99,9 @@ function findAllCols(headers: string[], name: string): number[] {
 }
 
 /**
- * Resolve Memtime columns by header name, preserving "Booked on" columns by
- * position (1st→department, 2nd→role, 3rd→task). Two Booked on columns plus
- * Activity Type is the new shape: task stays empty and Activity Type is stored
- * as type. Three Booked on columns keep the old task.
+ * Resolve Memtime columns by header name.
+ * Separate Booked on columns stay positional (1st department, 2nd role, 3rd task).
+ * One Booked on column is a path: "Department / Role" or "Department / Role / Task".
  */
 export function resolveMemtimeColumns(
   headers: string[]
@@ -106,20 +113,19 @@ export function resolveMemtimeColumns(
   const date = findCol(headers, "Date");
   const activityType = findCol(headers, "Activity Type");
   const typeOfLoggedWork = findCol(headers, "Type of Logged Work");
+  const billable = findCol(headers, "Billable");
   const comment = findCol(headers, "Comment");
   const status = findCol(headers, "Status");
 
   const missing: string[] = [];
   if (user < 0) missing.push("User");
-  if (bookedOn.length < 2) {
-    missing.push(
-      `Booked on (need at least 2 columns by position, found ${bookedOn.length})`
-    );
-  }
+  if (bookedOn.length < 1) missing.push("Booked on");
   if (loggedTime < 0) missing.push("Logged Time");
   if (time < 0) missing.push("Time");
   if (date < 0) missing.push("Date");
-  if (typeOfLoggedWork < 0) missing.push("Type of Logged Work");
+  if (typeOfLoggedWork < 0 && billable < 0) {
+    missing.push("Billable or Type of Logged Work");
+  }
 
   if (missing.length > 0) {
     return {
@@ -132,15 +138,34 @@ export function resolveMemtimeColumns(
     ok: true,
     cols: {
       user,
-      bookedOn: [bookedOn[0], bookedOn[1], bookedOn[2] ?? -1],
+      bookedOn: [bookedOn[0], bookedOn[1] ?? -1, bookedOn[2] ?? -1],
+      bookedOnPath: bookedOn.length === 1,
       loggedTime,
       time,
       date,
       activityType,
       typeOfLoggedWork,
+      billable: billable >= 0 ? billable : null,
       comment: comment >= 0 ? comment : null,
       status: status >= 0 ? status : null,
     },
+  };
+}
+
+/** "Department / Role / Task". A task may contain " / ", so the remainder stays together. */
+export function splitBookedOnPath(raw: string): {
+  department: string | null;
+  role: string | null;
+  task: string | null;
+} {
+  const parts = raw
+    .split(" / ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return {
+    department: parts[0] ?? null,
+    role: parts[1] ?? null,
+    task: parts.length > 2 ? parts.slice(2).join(" / ") : null,
   };
 }
 
@@ -220,11 +245,13 @@ function parseLoggedMinutes(raw: string): number | null {
 function mapBillableLabel(raw: string): string | null {
   const v = raw.trim().toLowerCase();
   if (!v) return null;
-  if (v === "billable") return "Billable";
+  if (v === "billable" || v === "yes" || v === "y") return "Billable";
   if (
     v === "non-billable" ||
     v === "nonbillable" ||
-    v === "non billable"
+    v === "non billable" ||
+    v === "no" ||
+    v === "n"
   ) {
     return "Non-Billable";
   }
@@ -305,11 +332,21 @@ export function parseMemtimeCsv(
     const rowNumber = idx + 2;
 
     const userRaw = cellAt(cells, cols.user);
-    const department = trimOrNull(cellAt(cells, cols.bookedOn[0]));
-    const role = trimOrNull(cellAt(cells, cols.bookedOn[1]));
-    const task = trimOrNull(cellAt(cells, cols.bookedOn[2]));
+    const booked = cols.bookedOnPath
+      ? splitBookedOnPath(cellAt(cells, cols.bookedOn[0]))
+      : {
+          department: trimOrNull(cellAt(cells, cols.bookedOn[0])),
+          role: trimOrNull(cellAt(cells, cols.bookedOn[1])),
+          task: trimOrNull(cellAt(cells, cols.bookedOn[2])),
+        };
+    const department = booked.department;
+    const role = booked.role;
+    const task = booked.task;
     const type = trimOrNull(cellAt(cells, cols.activityType));
-    const billableRaw = cellAt(cells, cols.typeOfLoggedWork);
+    const billableRaw =
+      cols.billable != null
+        ? cellAt(cells, cols.billable)
+        : cellAt(cells, cols.typeOfLoggedWork);
     const billable = mapBillableLabel(billableRaw);
     const comments = trimOrNull(cellAt(cells, cols.comment ?? -1));
     const timeRange = trimOrNull(cellAt(cells, cols.time));
