@@ -15,12 +15,12 @@ import {
 import { formatDate, hours } from "@/lib/formatters";
 import type { Num } from "@/lib/types";
 import {
+  catalogValue,
   fieldClass,
   primaryButtonClass,
   quietButtonClass,
   ReadValue,
   rolesForDepartment,
-  withCurrent,
 } from "./fields";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
@@ -79,9 +79,22 @@ export function EntryEditor({
 }) {
   const followed = useMemo(() => ruleCategory(entry, index), [entry, index]);
   const loggedBillable = shownBillable(entry.raw_billable ?? entry.billable);
-  const [department, setDepartment] = useState(entry.department ?? "");
-  const [role, setRole] = useState(entry.role ?? "");
-  const [activityType, setActivityType] = useState(entry.type ?? "");
+  const activityNames = useMemo(
+    () => catalog.activityTypes.map((row) => row.name),
+    [catalog.activityTypes]
+  );
+  const [department, setDepartment] = useState(() =>
+    catalogValue(catalog.departments, entry.department)
+  );
+  const [role, setRole] = useState(() =>
+    catalogValue(rolesForDepartment(catalog, entry.department ?? ""), entry.role)
+  );
+  const [activityType, setActivityType] = useState(() =>
+    catalogValue(
+      catalog.activityTypes.map((row) => row.name),
+      entry.type
+    )
+  );
   const [billable, setBillable] = useState(shownBillable(entry.billable));
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<"save" | "clear" | null>(null);
@@ -92,17 +105,11 @@ export function EntryEditor({
     index
   );
   const roleOptions = useMemo(
-    () => withCurrent(rolesForDepartment(catalog, department), role),
-    [catalog, department, role]
+    () => rolesForDepartment(catalog, department),
+    [catalog, department]
   );
-  const departmentOptions = useMemo(
-    () => withCurrent(catalog.departments, department),
-    [catalog.departments, department]
-  );
-  const activityOptions = useMemo(
-    () => withCurrent(catalog.activityTypes.map((row) => row.name), activityType),
-    [catalog.activityTypes, activityType]
-  );
+  const departmentOptions = catalog.departments;
+  const activityOptions = activityNames;
 
   function statusWithoutOverride(): EntrySavePatch["mapping_status"] {
     if (isNew) return "new_structure";
