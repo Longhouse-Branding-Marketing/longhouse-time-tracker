@@ -1,13 +1,23 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { CaretDownIcon } from "@phosphor-icons/react";
 import { matchesContains } from "@/lib/contains";
+import { useMenuPlacement } from "@/lib/useMenuPlacement";
 
 export type SearchableOption = {
   value: string;
   label: string;
 };
+
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+}
 
 export function SearchableSelect({
   value,
@@ -30,9 +40,12 @@ export function SearchableSelect({
 }) {
   const listId = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mounted = useIsClient();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const placement = useMenuPlacement(ref, open);
 
   const selected = options.find((option) => option.value === value) ?? null;
   const display = open ? query : selected?.label ?? "";
@@ -45,10 +58,10 @@ export function SearchableSelect({
   useEffect(() => {
     if (!open) return;
     const onDoc = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
+      const target = event.target as Node;
+      if (ref.current?.contains(target) || listRef.current?.contains(target)) return;
+      setOpen(false);
+      setQuery("");
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -66,6 +79,58 @@ export function SearchableSelect({
     setQuery("");
     inputRef.current?.blur();
   }
+
+  const menu =
+    open && mounted && placement
+      ? createPortal(
+          <div
+            ref={listRef}
+            id={listId}
+            role="listbox"
+            className="lh-dropdown-panel fixed z-[80] overflow-auto p-1.5"
+            style={{
+              top: placement.top,
+              left: placement.left,
+              width: placement.width,
+              maxHeight: placement.maxHeight,
+              transformOrigin: placement.openUp ? "bottom left" : "top left",
+            }}
+          >
+            {allowEmpty ? (
+              <button
+                type="button"
+                role="option"
+                aria-selected={!value}
+                onClick={() => pick("")}
+                className={`lh-dropdown-option w-full rounded-md px-2.5 py-2 text-left text-[13px] touch-manipulation ${
+                  !value ? "bg-info-soft text-ink" : "text-muted"
+                }`}
+              >
+                {emptyLabel}
+              </button>
+            ) : null}
+            {filtered.length === 0 ? (
+              <p className="px-2.5 py-2 text-[13px] text-muted">No matches</p>
+            ) : (
+              filtered.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={option.value === value}
+                  onClick={() => pick(option.value)}
+                  className={`lh-dropdown-option w-full rounded-md px-2.5 py-2 text-left text-[13px] touch-manipulation ${
+                    option.value === value ? "bg-info-soft font-medium text-ink" : "text-ink"
+                  }`}
+                >
+                  <span className="block truncate">{option.label}</span>
+                </button>
+              ))
+            )}
+          </div>,
+          document.body
+        )
+      : null;
 
   return (
     <div className={`relative ${className}`} ref={ref}>
@@ -98,6 +163,7 @@ export function SearchableSelect({
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               setOpen(false);
               setQuery("");
               inputRef.current?.blur();
@@ -134,46 +200,7 @@ export function SearchableSelect({
           />
         </button>
       </div>
-
-      {open ? (
-        <div
-          id={listId}
-          role="listbox"
-          className="lh-dropdown-panel absolute left-0 right-0 z-40 mt-1.5 max-h-56 overflow-auto p-1.5"
-        >
-          {allowEmpty ? (
-            <button
-              type="button"
-              role="option"
-              aria-selected={!value}
-              onClick={() => pick("")}
-              className={`lh-dropdown-option w-full rounded-md px-2.5 py-2 text-left text-[13px] touch-manipulation ${
-                !value ? "bg-info-soft text-ink" : "text-muted"
-              }`}
-            >
-              {emptyLabel}
-            </button>
-          ) : null}
-          {filtered.length === 0 ? (
-            <p className="px-2.5 py-2 text-[13px] text-muted">No matches</p>
-          ) : (
-            filtered.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                onClick={() => pick(option.value)}
-                className={`lh-dropdown-option w-full rounded-md px-2.5 py-2 text-left text-[13px] touch-manipulation ${
-                  option.value === value ? "bg-info-soft font-medium text-ink" : "text-ink"
-                }`}
-              >
-                <span className="block truncate">{option.label}</span>
-              </button>
-            ))
-          )}
-        </div>
-      ) : null}
+      {menu}
     </div>
   );
 }
