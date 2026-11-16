@@ -15,6 +15,12 @@ export function withCurrent(options: string[], current: string): string[] {
   return [value, ...options];
 }
 
+/** Keep a value only when it already belongs to the new catalog list. */
+export function catalogValue(options: string[], current: string | null | undefined): string {
+  const value = (current ?? "").trim();
+  return value && options.includes(value) ? value : "";
+}
+
 /** Department roles first, then every other catalog role so options like Executive stay available. */
 export function rolesForDepartment(catalog: ReviewCatalog, department: string): string[] {
   const all = Array.from(new Set(catalog.roles.map((row) => row.role))).sort((a, b) =>

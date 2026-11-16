@@ -35,7 +35,6 @@ import {
   primaryButtonClass,
   quietButtonClass,
   rolesForDepartment,
-  withCurrent,
 } from "./fields";
 import { MappingEditor, type MappingSavePatch } from "./MappingEditor";
 
@@ -684,12 +683,9 @@ function BulkCategoryEditor({
   const [department, setDepartment] = useState("");
   const [role, setRole] = useState("");
   const [activityType, setActivityType] = useState("");
-  const roleOptions = withCurrent(rolesForDepartment(catalog, department), role);
-  const departmentOptions = withCurrent(catalog.departments, department);
-  const activityOptions = withCurrent(
-    catalog.activityTypes.map((row) => row.name),
-    activityType
-  );
+  const roleOptions = rolesForDepartment(catalog, department);
+  const departmentOptions = catalog.departments;
+  const activityOptions = catalog.activityTypes.map((row) => row.name);
 
   return (
     <EditModal

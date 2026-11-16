@@ -7,12 +7,12 @@ import { EditModal } from "@/components/settings/EditModal";
 import type { MappingListRow, ReviewCatalog } from "@/lib/categoryMap";
 import { n } from "@/lib/formatters";
 import {
+  catalogValue,
   fieldClass,
   primaryButtonClass,
   quietButtonClass,
   ReadValue,
   rolesForDepartment,
-  withCurrent,
 } from "./fields";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
@@ -49,20 +49,24 @@ export function MappingEditor({
 }) {
   const initialActivity =
     catalog.activityTypes.find((row) => row.name === mapping.activityType)?.id ?? "";
-  const [department, setDepartment] = useState(mapping.newDepartment ?? "");
-  const [role, setRole] = useState(mapping.newRole ?? "");
+  const [department, setDepartment] = useState(() =>
+    catalogValue(catalog.departments, mapping.newDepartment)
+  );
+  const [role, setRole] = useState(() =>
+    catalogValue(
+      rolesForDepartment(catalog, mapping.newDepartment ?? ""),
+      mapping.newRole
+    )
+  );
   const [activityId, setActivityId] = useState(initialActivity);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   const roleOptions = useMemo(
-    () => withCurrent(rolesForDepartment(catalog, department), role),
-    [catalog, department, role]
+    () => rolesForDepartment(catalog, department),
+    [catalog, department]
   );
-  const departmentOptions = useMemo(
-    () => withCurrent(catalog.departments, department),
-    [catalog.departments, department]
-  );
+  const departmentOptions = catalog.departments;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
