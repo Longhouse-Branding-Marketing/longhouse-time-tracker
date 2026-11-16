@@ -114,16 +114,16 @@ tool-based filtered aggregates; set `ANTHROPIC_API_KEY` to enable it.
 2. Set `SUPABASE_SERVICE_ROLE_KEY` in `.env.local` so the app can read/write base `time_entries`.
 3. Open **Import** in the dock and upload a **raw Memtime CSV** (no manual column renames).
 
-Memtime mapping (by column position for the three `Booked on` headers):
+Memtime mapping. Older exports use separate `Booked on` columns. The Time Tracking Report uses one `Booked on` cell, split on ` / ` into department, role, and task (a task may itself contain ` / `).
 
 | Memtime | Stored as |
 | --- | --- |
 | User | `person` (matched to `employees.person` when possible) |
-| 1st Booked on | `department` |
-| 2nd Booked on | `role` |
-| 3rd Booked on | `task` |
+| Booked on path, or 1st Booked on | `department` |
+| 2nd segment, or 2nd Booked on | `role` |
+| Remaining path, or 3rd Booked on | `task` |
 | Activity Type | `type` |
-| Type of Logged Work | `billable` (`Billable` / `Non-Billable`) |
+| Billable (`Yes` / `No`), or Type of Logged Work | `billable` (`Billable` / `Non-Billable`) |
 | Logged Time | `hours` = minutes ÷ 60 |
 | Date | `date` |
 | Comment | `comments` |
