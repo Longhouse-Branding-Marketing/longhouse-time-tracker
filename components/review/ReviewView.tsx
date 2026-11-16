@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CaretLeftIcon, CaretRightIcon, XIcon } from "@phosphor-icons/react";
 import type { ActionResult } from "@/app/review/actions";
 import { FilterBar } from "@/components/FilterBar";
 import { MultiSelect } from "@/components/MultiSelect";
-import { Badge, EmptyRow, PageHeader, PageShell, Panel } from "@/components/ui";
+import { EditModal } from "@/components/settings/EditModal";
+import { EmptyRow, PageHeader, PageShell, Panel } from "@/components/ui";
 import {
   entryMatchesMapping,
   indexFromReview,
@@ -27,6 +28,13 @@ import {
 import { formatDate, hours } from "@/lib/formatters";
 import type { EntryRow } from "@/lib/types";
 import { EntryEditor } from "./EntryEditor";
+import {
+  fieldClass,
+  primaryButtonClass,
+  quietButtonClass,
+  rolesForDepartment,
+  withCurrent,
+} from "./fields";
 import { MappingEditor } from "./MappingEditor";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
@@ -40,15 +48,11 @@ export type ReviewPayload = {
   checks: CatalogIssue[];
 };
 
-type Section = "Mappings" | "Entries" | "Checks";
-type MappingFilter = "Unmapped" | "Confirmed" | "Exceptions";
-type EntryFilter = "All" | "Unmapped" | "Exceptions";
+type Section = "Mapping" | "Entries" | "Checks";
 
 const PAGE_SIZE = 200;
 
-const SECTIONS: Section[] = ["Mappings", "Entries", "Checks"];
-const MAPPING_FILTERS: MappingFilter[] = ["Unmapped", "Confirmed", "Exceptions"];
-const ENTRY_FILTERS: EntryFilter[] = ["All", "Unmapped", "Exceptions"];
+const SECTIONS: Section[] = ["Mapping", "Entries", "Checks"];
 const BILLABLE_OPTIONS = ["Billable", "Non-Billable", "Billable Review"];
 
 function blank(value: string | null | undefined): string {
@@ -79,14 +83,14 @@ export function ReviewView({
   saveMapping,
   saveEntry,
   clearCategory,
-  markBillable,
+  updateEntries,
 }: {
   entries: EntryRow[];
   review: ReviewPayload;
   saveMapping: SaveAction;
   saveEntry: SaveAction;
   clearCategory: SaveAction;
-  markBillable: SaveAction;
+  updateEntries: SaveAction;
 }) {
   const searchParams = useSearchParams();
   const index = useMemo(() => indexFromReview(review), [review]);
@@ -99,10 +103,14 @@ export function ReviewView({
     return null;
   }, [mappings, searchParams]);
 
-  const [section, setSection] = useState<Section>("Mappings");
-  const [mappingFilter, setMappingFilter] = useState<MappingFilter>("Unmapped");
-  const [entryFilter, setEntryFilter] = useState<EntryFilter>("All");
+  const [section, setSection] = useState<Section>("Mapping");
   const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<number[]>([]);
+  const [bulkCategory, setBulkCategory] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [savingBulk, setSavingBulk] = useState(false);
+  const noticeTimer = useRef<number | null>(null);
   const bounds = useMemo(() => dateBounds(entries), [entries]);
   const filterOptions = useMemo(() => extractOptions(entries), [entries]);
   const fallbackFilters = useMemo(() => defaultFilters(bounds), [bounds]);
@@ -120,13 +128,9 @@ export function ReviewView({
   const [mappingChoice, setMappingChoice] = useState<MappingListRow | null>(null);
   const [queryDismissed, setQueryDismissed] = useState(false);
   const [entry, setEntry] = useState<EntryRow | null>(null);
-  const [markError, setMarkError] = useState<string | null>(null);
-  const [marking, setMarking] = useState(false);
   const mapping = queryDismissed ? mappingChoice : (mappingChoice ?? requestedMapping);
   const listKey = [
     section,
-    mappingFilter,
-    entryFilter,
     query,
     scope?.key ?? "",
     activeFilters.from,
@@ -153,29 +157,18 @@ export function ReviewView({
 
   const visibleMappings = useMemo(() => {
     return mappings.filter((row) => {
-      if (mappingFilter === "Unmapped" && row.status !== "unmapped") return false;
-      if (mappingFilter === "Confirmed" && row.status !== "confirmed") return false;
-      if (mappingFilter === "Exceptions" && row.exceptions === 0) return false;
-      return matchesQuery(needle, [
-        row.department,
-        row.role,
-        row.task,
-        row.newDepartment,
-        row.newRole,
-        row.activityType,
-      ]);
+      if (row.status !== "unmapped") return false;
+      return matchesQuery(needle, [row.department, row.role, row.task]);
     });
-  }, [mappingFilter, mappings, needle]);
+  }, [mappings, needle]);
 
   const visibleEntries = useMemo(() => {
     return applyFilters(entries, activeFilters).filter((row) => {
       if (!matchesBillable(row, billableFilter)) return false;
       if (scope && !entryMatchesMapping(row, scope, index)) return false;
-      if (entryFilter === "Unmapped" && row.mapping_status !== "unmapped") return false;
-      if (entryFilter === "Exceptions" && row.mapping_status !== "override") return false;
       return true;
     });
-  }, [activeFilters, billableFilter, entries, entryFilter, index, scope]);
+  }, [activeFilters, billableFilter, entries, index, scope]);
 
   const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -184,30 +177,66 @@ export function ReviewView({
     currentPage * PAGE_SIZE + PAGE_SIZE
   );
 
+  function showSaved() {
+    setNotice("Saved");
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 2500);
+  }
+
   function openMappingForEntry(row: EntryRow) {
     const match = mappings.find((item) => entryMatchesMapping(row, item, index));
     if (!match) return;
     setEntry(null);
-    setSection("Mappings");
+    setSection("Mapping");
     chooseMapping(match);
   }
 
-  const reviewIds = visibleEntries
-    .filter((row) => isPartnerBillableReview(row))
-    .map((row) => row.id);
+  const selectedOnPage = pageEntries.filter((row) => selected.includes(row.id)).length;
+  const pageIds = pageEntries.map((row) => row.id);
 
-  async function onMarkBillable() {
+  function toggleRow(id: number) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  }
+
+  function togglePage() {
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.includes(id));
+    setSelected((current) => {
+      if (allSelected) return current.filter((id) => !pageIds.includes(id));
+      return Array.from(new Set([...current, ...pageIds]));
+    });
+  }
+
+  async function applyToSelected(fields: {
+    billable?: "Billable" | "Non-Billable";
+    department?: string;
+    role?: string;
+    activityType?: string;
+  }) {
     const fd = new FormData();
-    fd.set("entry_ids", JSON.stringify(reviewIds));
-    setMarking(true);
-    setMarkError(null);
-    const result = await markBillable(fd);
-    setMarking(false);
-    if (!result.ok) setMarkError(result.error ?? "Save failed");
+    fd.set("entry_ids", JSON.stringify(selected));
+    if (fields.billable) fd.set("billable", fields.billable);
+    if (fields.department && fields.role && fields.activityType) {
+      fd.set("department", fields.department);
+      fd.set("role", fields.role);
+      fd.set("activity_type", fields.activityType);
+    }
+    setSavingBulk(true);
+    setBulkError(null);
+    const result = await updateEntries(fd);
+    setSavingBulk(false);
+    if (!result.ok) {
+      setBulkError(result.error ?? "Save failed");
+      return;
+    }
+    setSelected([]);
+    setBulkCategory(false);
+    showSaved();
   }
 
   const countLabel =
-    section === "Mappings"
+    section === "Mapping"
       ? visibleMappings.length.toLocaleString()
       : section === "Entries"
         ? visibleEntries.length.toLocaleString()
@@ -216,6 +245,12 @@ export function ReviewView({
   return (
     <PageShell>
       <PageHeader title="Review">
+        <div className="flex items-center gap-3">
+          {notice ? (
+            <span className="text-[13px] font-medium text-positive" role="status">
+              {notice}
+            </span>
+          ) : null}
         <div className="flex rounded-lg border border-line bg-tint p-0.5">
           {SECTIONS.map((item) => (
             <button
@@ -229,6 +264,7 @@ export function ReviewView({
               {item}
             </button>
           ))}
+        </div>
         </div>
       </PageHeader>
 
@@ -252,16 +288,50 @@ export function ReviewView({
             selected={billableFilter}
             onChange={setBillableFilter}
           />
-          {billableFilter.includes("Billable Review") && reviewIds.length > 0 ? (
-            <button
-              type="button"
-              onClick={onMarkBillable}
-              disabled={marking}
-              className="h-8 rounded-md bg-brand px-3 text-[13px] font-medium text-white hover:bg-navy disabled:opacity-50"
-            >
-              {marking ? "Saving…" : `Mark ${reviewIds.length.toLocaleString()} Billable`}
-            </button>
-          ) : null}
+        </div>
+      ) : null}
+
+      {section === "Entries" && selected.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-card px-3 py-2">
+          <span className="text-[13px] font-medium text-ink">
+            {selected.length.toLocaleString()} Selected
+          </span>
+          <button
+            type="button"
+            disabled={savingBulk}
+            onClick={() => applyToSelected({ billable: "Billable" })}
+            className={primaryButtonClass}
+          >
+            Billable
+          </button>
+          <button
+            type="button"
+            disabled={savingBulk}
+            onClick={() => applyToSelected({ billable: "Non-Billable" })}
+            className={quietButtonClass}
+          >
+            Non-Billable
+          </button>
+          <button
+            type="button"
+            disabled={savingBulk}
+            onClick={() => {
+              setBulkError(null);
+              setBulkCategory(true);
+            }}
+            className={quietButtonClass}
+          >
+            Category
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected([])}
+            className="ml-auto inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-brand-600 hover:bg-tint"
+          >
+            <XIcon size={14} weight="bold" aria-hidden />
+            Clear
+          </button>
+          {bulkError ? <span className="text-[12px] text-serious">{bulkError}</span> : null}
         </div>
       ) : null}
 
@@ -269,50 +339,19 @@ export function ReviewView({
         title={section}
         className="mt-5"
         noBodyPadding
-        right={<span className="text-[12px] tabular-nums text-muted">{countLabel}</span>}
-      >
-        {section !== "Checks" ? (
-          <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
-            {(section === "Mappings" ? MAPPING_FILTERS : ENTRY_FILTERS).map((item) => {
-              const active = section === "Mappings" ? mappingFilter === item : entryFilter === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    if (section === "Mappings") setMappingFilter(item as MappingFilter);
-                    else setEntryFilter(item as EntryFilter);
-                  }}
-                  className={`h-8 rounded-md px-2.5 text-[13px] font-medium ${
-                    active
-                      ? "bg-navy text-white"
-                      : "border border-line bg-card text-muted hover:text-ink"
-                  }`}
-                >
-                  {item}
-                </button>
-              );
-            })}
-            {scope ? (
-              <button
-                type="button"
-                onClick={() => setScope(null)}
-                className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-brand-600 hover:bg-tint"
-              >
-                <XIcon size={14} weight="bold" aria-hidden />
-                {scope.task || "Task"}
-              </button>
-            ) : null}
-            {section === "Mappings" ? (
+        right={
+          <div className="flex items-center gap-3">
+            {section === "Mapping" ? (
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 aria-label="Search"
                 placeholder="Search"
-                className="lh-dropdown-input ml-auto h-8 w-52 px-2.5 text-[13px] placeholder:text-muted"
+                className="lh-dropdown-input h-8 w-44 px-2.5 text-[13px] placeholder:text-muted"
               />
-            ) : (
-              <div className="ml-auto flex items-center gap-1">
+            ) : null}
+            {section === "Entries" ? (
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   aria-label="Previous"
@@ -335,20 +374,27 @@ export function ReviewView({
                   <CaretRightIcon size={14} weight="bold" aria-hidden />
                 </button>
               </div>
-            )}
-            {markError ? <span className="text-[12px] text-serious">{markError}</span> : null}
+            ) : null}
+            <span className="text-[12px] tabular-nums text-muted">{countLabel}</span>
+          </div>
+        }
+      >
+        {section === "Entries" && scope ? (
+          <div className="flex items-center border-b border-line px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setScope(null)}
+              className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-brand-600 hover:bg-tint"
+            >
+              <XIcon size={14} weight="bold" aria-hidden />
+              {scope.task || scope.department || "Mapped Group"}
+            </button>
           </div>
         ) : null}
 
-        {section === "Mappings" ? (
+        {section === "Mapping" ? (
           visibleMappings.length === 0 ? (
-            <EmptyRow>
-              {mappingFilter === "Unmapped"
-                ? "No Unmapped Entries"
-                : mappingFilter === "Exceptions"
-                  ? "No Exceptions"
-                  : "No Confirmed Mappings"}
-            </EmptyRow>
+            <EmptyRow>No Unmapped Entries</EmptyRow>
           ) : (
             <div className="lh-scroll max-h-[min(70vh,760px)] overflow-auto">
               <table className="lh-table">
@@ -357,7 +403,6 @@ export function ReviewView({
                     <th>Department</th>
                     <th>Role</th>
                     <th>Task</th>
-                    <th>Activity Type</th>
                     <th className="whitespace-nowrap text-right">Entries</th>
                     <th className="whitespace-nowrap text-right">Hours</th>
                   </tr>
@@ -376,12 +421,6 @@ export function ReviewView({
                       <td>{blank(row.department)}</td>
                       <td>{blank(row.role)}</td>
                       <td className="font-medium text-ink">{blank(row.task)}</td>
-                      <td>
-                        <span className="inline-flex items-center gap-2">
-                          {blank(row.activityType)}
-                          {row.exceptions > 0 ? <Badge tone="review">Exception</Badge> : null}
-                        </span>
-                      </td>
                       <td className="whitespace-nowrap text-right tabular-nums">
                         {row.entries.toLocaleString()}
                       </td>
@@ -404,6 +443,15 @@ export function ReviewView({
               <table className="lh-table">
                 <thead>
                   <tr>
+                    <th className="w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select page"
+                        checked={pageIds.length > 0 && selectedOnPage === pageIds.length}
+                        onChange={togglePage}
+                        className="h-3.5 w-3.5 accent-[color:var(--color-brand)]"
+                      />
+                    </th>
                     <th>Date</th>
                     <th>Person</th>
                     <th className="whitespace-nowrap text-right">Hours</th>
@@ -420,26 +468,31 @@ export function ReviewView({
                       key={row.id}
                       tabIndex={0}
                       className="cursor-pointer"
-                        onClick={() => setEntry({ ...row, comments: comments.get(row.id) ?? null })}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            setEntry({ ...row, comments: comments.get(row.id) ?? null });
-                          }
-                        }}
+                      onClick={() => setEntry({ ...row, comments: comments.get(row.id) ?? null })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          setEntry({ ...row, comments: comments.get(row.id) ?? null });
+                        }
+                      }}
+                    >
+                      <td
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
                       >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.person} ${row.date}`}
+                          checked={selected.includes(row.id)}
+                          onChange={() => toggleRow(row.id)}
+                          className="h-3.5 w-3.5 accent-[color:var(--color-brand)]"
+                        />
+                      </td>
                       <td className="whitespace-nowrap tabular-nums">{formatDate(row.date)}</td>
                       <td className="whitespace-nowrap">{row.person}</td>
                       <td className="whitespace-nowrap text-right tabular-nums">{hours(row.hours)}</td>
                       <td>{blank(row.department)}</td>
                       <td>{blank(row.role)}</td>
-                      <td>
-                        <span className="inline-flex items-center gap-2">
-                          {blank(row.type)}
-                          {row.mapping_status === "override" ? (
-                            <Badge tone="review">Exception</Badge>
-                          ) : null}
-                        </span>
-                      </td>
+                      <td>{blank(row.type)}</td>
                       <td className="whitespace-nowrap">{blank(row.billable)}</td>
                       <td className="max-w-[220px]">
                         <span className="line-clamp-2 text-[12px] text-muted">
@@ -488,10 +541,10 @@ export function ReviewView({
           catalog={review.catalog}
           saveAction={saveMapping}
           onClose={() => chooseMapping(null)}
+          onSaved={showSaved}
           onViewEntries={() => {
             setScope(mapping);
             setSection("Entries");
-            setEntryFilter("All");
             setQuery("");
             chooseMapping(null);
           }}
@@ -506,9 +559,130 @@ export function ReviewView({
           saveAction={saveEntry}
           clearAction={clearCategory}
           onClose={() => setEntry(null)}
+          onSaved={showSaved}
           onEditMapping={() => openMappingForEntry(entry)}
         />
       ) : null}
+
+      {bulkCategory ? (
+        <BulkCategoryEditor
+          count={selected.length}
+          catalog={review.catalog}
+          pending={savingBulk}
+          error={bulkError}
+          onClose={() => setBulkCategory(false)}
+          onSave={(fields) => applyToSelected(fields)}
+        />
+      ) : null}
     </PageShell>
+  );
+}
+
+function BulkCategoryEditor({
+  count,
+  catalog,
+  pending,
+  error,
+  onClose,
+  onSave,
+}: {
+  count: number;
+  catalog: ReviewCatalog;
+  pending: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: (fields: { department: string; role: string; activityType: string }) => void;
+}) {
+  const [department, setDepartment] = useState("");
+  const [role, setRole] = useState("");
+  const [activityType, setActivityType] = useState("");
+  const roleOptions = withCurrent(rolesForDepartment(catalog, department), role);
+  const departmentOptions = withCurrent(catalog.departments, department);
+  const activityOptions = withCurrent(
+    catalog.activityTypes.map((row) => row.name),
+    activityType
+  );
+
+  return (
+    <EditModal
+      title="Category"
+      onClose={onClose}
+      headerRight={`${count.toLocaleString()} Entries`}
+    >
+      <form
+        className="px-5 py-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!department || !role || !activityType) return;
+          onSave({ department, role, activityType });
+        }}
+      >
+        <div className="grid gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="lh-meta-label">Department</span>
+            <select
+              value={department}
+              onChange={(event) => {
+                const next = event.target.value;
+                setDepartment(next);
+                const roles = rolesForDepartment(catalog, next);
+                if (role && roles.length > 0 && !roles.includes(role)) setRole("");
+              }}
+              className={fieldClass}
+            >
+              <option value="">—</option>
+              {departmentOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="lh-meta-label">Role</span>
+            <select
+              value={role}
+              onChange={(event) => setRole(event.target.value)}
+              className={fieldClass}
+            >
+              <option value="">—</option>
+              {roleOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="lh-meta-label">Activity Type</span>
+            <select
+              value={activityType}
+              onChange={(event) => setActivityType(event.target.value)}
+              className={fieldClass}
+            >
+              <option value="">—</option>
+              {activityOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-line pt-4">
+          {error ? <span className="mr-auto text-[12px] text-serious">{error}</span> : null}
+          <button type="button" onClick={onClose} className={quietButtonClass}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={pending || !department || !role || !activityType}
+            className={primaryButtonClass}
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </form>
+    </EditModal>
   );
 }

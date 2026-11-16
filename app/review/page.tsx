@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import {
   clearEntryCategory,
-  markEntriesBillable,
   saveEntryOverride,
   saveMapping,
+  updateEntries,
 } from "@/app/review/actions";
 import { PageError, PageLoading } from "@/components/PageStatus";
 import { ReviewView, type ReviewPayload } from "@/components/review/ReviewView";
@@ -21,6 +21,14 @@ type DashboardPayload = {
 function ReviewPageBody() {
   const entriesState = useApiData<DashboardPayload>("/api/dashboard");
   const reviewState = useApiData<ReviewPayload>("/api/review");
+  const [entriesData, setEntriesData] = useState<DashboardPayload | null>(null);
+  const [reviewData, setReviewData] = useState<ReviewPayload | null>(null);
+  if (entriesState.status === "ready" && entriesState.data !== entriesData) {
+    setEntriesData(entriesState.data);
+  }
+  if (reviewState.status === "ready" && reviewState.data !== reviewData) {
+    setReviewData(reviewState.data);
+  }
   const appendAuth = useAppendHubAccessToken();
 
   const actions = useMemo(
@@ -28,29 +36,29 @@ function ReviewPageBody() {
       saveMapping: withRefetch(saveMapping, appendAuth),
       saveEntry: withRefetch(saveEntryOverride, appendAuth),
       clearCategory: withRefetch(clearEntryCategory, appendAuth),
-      markBillable: withRefetch(markEntriesBillable, appendAuth),
+      updateEntries: withRefetch(updateEntries, appendAuth),
     }),
     [appendAuth]
   );
 
-  if (entriesState.status === "loading" || reviewState.status === "loading") {
+  if (!entriesData || !reviewData) {
+    if (entriesState.status === "error") {
+      return <PageError message={entriesState.message} onRetry={entriesState.refetch} />;
+    }
+    if (reviewState.status === "error") {
+      return <PageError message={reviewState.message} onRetry={reviewState.refetch} />;
+    }
     return <PageLoading label="Loading review…" />;
-  }
-  if (entriesState.status === "error") {
-    return <PageError message={entriesState.message} onRetry={entriesState.refetch} />;
-  }
-  if (reviewState.status === "error") {
-    return <PageError message={reviewState.message} onRetry={reviewState.refetch} />;
   }
 
   return (
     <ReviewView
-      entries={entriesState.data.entries}
-      review={reviewState.data}
+      entries={entriesData.entries}
+      review={reviewData}
       saveMapping={actions.saveMapping}
       saveEntry={actions.saveEntry}
       clearCategory={actions.clearCategory}
-      markBillable={actions.markBillable}
+      updateEntries={actions.updateEntries}
     />
   );
 }

@@ -241,15 +241,11 @@ export async function clearEntryCategory(fd: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function markEntriesBillable(fd: FormData): Promise<ActionResult> {
-  const denied = await ensureAuth(fd);
-  if (denied) return denied;
-
-  let ids: number[] = [];
+function entryIds(fd: FormData): number[] | null {
   try {
     const parsed = JSON.parse(str(fd, "entry_ids") ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) throw new Error("No entries");
-    ids = Array.from(
+    if (!Array.isArray(parsed)) return null;
+    return Array.from(
       new Set(
         parsed.filter(
           (value): value is number =>
@@ -258,9 +254,29 @@ export async function markEntriesBillable(fd: FormData): Promise<ActionResult> {
       )
     );
   } catch {
-    return { ok: false, error: "No entries" };
+    return null;
   }
-  if (ids.length === 0) return { ok: false, error: "No entries" };
+}
+
+export async function markEntriesBillable(fd: FormData): Promise<ActionResult> {
+  fd.set("billable", "Billable");
+  return updateEntries(fd);
+}
+
+/** Apply billable and, when all three are present, category to the selected entries. */
+export async function updateEntries(fd: FormData): Promise<ActionResult> {
+  const denied = await ensureAuth(fd);
+  if (denied) return denied;
+
+  const ids = entryIds(fd);
+  if (!ids || ids.length === 0) return { ok: false, error: "No entries" };
+
+  const billable = billableValue(str(fd, "billable"));
+  const department = str(fd, "department");
+  const role = str(fd, "role");
+  const activityType = str(fd, "activity_type");
+  const setCategory = Boolean(department && role && activityType);
+  if (!billable && !setCategory) return { ok: false, error: "Nothing to save" };
 
   const updatedAt = new Date().toISOString();
   try {
@@ -268,11 +284,16 @@ export async function markEntriesBillable(fd: FormData): Promise<ActionResult> {
       const supabase = writeClient();
       const size = 400;
       for (let start = 0; start < ids.length; start += size) {
-        const rows = ids.slice(start, start + size).map((id) => ({
-          entry_id: id,
-          billable: "Billable",
-          updated_at: updatedAt,
-        }));
+        const rows = ids.slice(start, start + size).map((id) => {
+          const row: Record<string, unknown> = { entry_id: id, updated_at: updatedAt };
+          if (billable) row.billable = billable;
+          if (setCategory) {
+            row.department = department;
+            row.role = role;
+            row.activity_type = activityType;
+          }
+          return row;
+        });
         const { error } = await supabase.from("time_entry_overrides").upsert(rows, {
           onConflict: "entry_id",
         });
