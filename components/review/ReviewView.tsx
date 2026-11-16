@@ -108,6 +108,36 @@ function remapOpenEntries(rows: EntryRow[], nextIndex: CategoryIndex): EntryRow[
   );
 }
 
+/**
+ * Keep optimistic per-entry category overrides when a refetch still returns
+ * the pre-save payload (common with process-local caches).
+ */
+function mergeEntryOverrides(
+  serverEntries: EntryRow[],
+  localEntries: EntryRow[]
+): EntryRow[] {
+  const localOverrides = new Map<number, EntryRow>();
+  for (const row of localEntries) {
+    if (row.mapping_status === "override") localOverrides.set(row.id, row);
+  }
+  if (localOverrides.size === 0) return serverEntries;
+
+  return serverEntries.map((row) => {
+    if (row.mapping_status === "override") return row;
+    const local = localOverrides.get(row.id);
+    if (!local) return row;
+    return {
+      ...row,
+      department: local.department,
+      role: local.role,
+      type: local.type,
+      billable: local.billable,
+      is_billable: local.is_billable,
+      mapping_status: "override",
+    };
+  });
+}
+
 export function ReviewView({
   entries,
   employees,
@@ -139,7 +169,10 @@ export function ReviewView({
         ? { ...review, tasks: mergeReviewTasks(review.tasks, localReview.tasks) }
         : localReview;
     const nextIndex = indexFromReview(nextReview);
-    const sourceEntries = entries !== entriesProp ? entries : localEntries;
+    const sourceEntries =
+      entries !== entriesProp
+        ? mergeEntryOverrides(entries, localEntries)
+        : localEntries;
 
     if (review !== reviewProp) {
       setReviewProp(review);

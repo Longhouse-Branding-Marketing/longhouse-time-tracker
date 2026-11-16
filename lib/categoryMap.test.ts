@@ -4,6 +4,7 @@ import {
   applyCategoryMap,
   applyCategoryMapToEntries,
   createCategoryIndex,
+  entryMatchesMapping,
   isNewStructureEntry,
   isPartnerBillableReview,
   lookupTaskMap,
@@ -290,15 +291,29 @@ describe("category crosswalk", () => {
     assert.equal(fixed.mapping_status, "override");
     assert.equal(unmappedGroups([fixed]).length, 0);
 
-    const rows = mappingList(createCategoryIndex({
+    const emptyIndex = createCategoryIndex({
       activityTypes: [],
       departments: [],
       roles: [],
       tasks: [],
-    }), [fixed]);
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.status, "unmapped");
-    assert.equal(rows[0]?.exceptions, 1);
+    });
+    assert.equal(mappingList(emptyIndex, [fixed]).length, 0);
+
+    const stillOpen = applyCategoryMap({ ...source, id: 10 });
+    const mixed = mappingList(emptyIndex, [fixed, stillOpen]);
+    assert.equal(mixed.length, 1);
+    assert.equal(mixed[0]?.status, "unmapped");
+    assert.equal(mixed[0]?.entries, 1);
+    assert.equal(mixed[0]?.exceptions, 0);
+
+    const unmappedScope = {
+      ruleId: null,
+      department: "Nope",
+      role: "Nope",
+      task: "Nope",
+    };
+    assert.equal(entryMatchesMapping(stillOpen, unmappedScope, emptyIndex), true);
+    assert.equal(entryMatchesMapping(fixed, unmappedScope, emptyIndex), false);
   });
 
   it("maps a logged row that has no task", () => {

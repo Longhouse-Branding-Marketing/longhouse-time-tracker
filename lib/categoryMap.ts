@@ -395,6 +395,10 @@ export function mappingList(
       continue;
     }
 
+    // Individually categorized entries are done — they must not keep an
+    // unmapped Mapping row alive after the user saves a per-entry override.
+    if (row.mapping_status && row.mapping_status !== "unmapped") continue;
+
     const key = `${department}\0${role}\0${task}`;
     const current = unmatched.get(key) ?? {
       department,
@@ -404,7 +408,7 @@ export function mappingList(
       hours: 0,
       exceptions: 0,
     };
-    unmatched.set(key, addCount(current, row.hours, exception));
+    unmatched.set(key, addCount(current, row.hours, false));
   }
 
   const confirmed: MappingListRow[] = index.tasks.map((task) => {
@@ -448,7 +452,7 @@ export function mappingList(
 }
 
 export function entryMatchesMapping(
-  row: CategorySource,
+  row: CategorySource & { mapping_status?: MappingStatus },
   mapping: Pick<MappingListRow, "ruleId" | "department" | "role" | "task">,
   index: CategoryIndex = defaultIndex
 ): boolean {
@@ -460,6 +464,8 @@ export function entryMatchesMapping(
   if (mapping.ruleId) {
     return lookupTaskMap(rawDepartment, rawRole, rawTask, index)?.id === mapping.ruleId;
   }
+  // Unmapped group scope: individually overridden entries no longer belong here.
+  if (row.mapping_status && row.mapping_status !== "unmapped") return false;
   return (
     text(rawDepartment) === mapping.department &&
     text(rawRole) === mapping.role &&
