@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import type { ActionResult } from "@/app/review/actions";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { EditModal } from "@/components/settings/EditModal";
 import type { MappingListRow, ReviewCatalog } from "@/lib/categoryMap";
 import { n } from "@/lib/formatters";
@@ -144,18 +145,15 @@ export function MappingEditor({
           </label>
           <label className="flex flex-col gap-1 sm:col-span-3">
             <span className="lh-meta-label">Activity Type</span>
-            <select
+            <SearchableSelect
               value={activityId}
-              onChange={(event) => setActivityId(event.target.value)}
-              className={fieldClass}
-            >
-              <option value="">—</option>
-              {catalog.activityTypes.map((row) => (
-                <option key={row.id || row.name} value={row.id}>
-                  {row.name}
-                </option>
-              ))}
-            </select>
+              onChange={setActivityId}
+              placeholder="Search activity type…"
+              options={catalog.activityTypes.map((row) => ({
+                value: row.id,
+                label: row.name,
+              }))}
+            />
           </label>
         </div>
 

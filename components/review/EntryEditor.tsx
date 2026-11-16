@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import type { ActionResult } from "@/app/review/actions";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { EditModal } from "@/components/settings/EditModal";
 import {
   isNewStructureEntry,
@@ -232,18 +233,12 @@ export function EntryEditor({
           </label>
           <label className="flex flex-col gap-1">
             <span className="lh-meta-label">Activity Type</span>
-            <select
+            <SearchableSelect
               value={activityType}
-              onChange={(event) => setActivityType(event.target.value)}
-              className={fieldClass}
-            >
-              <option value="">—</option>
-              {activityOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              onChange={setActivityType}
+              placeholder="Search activity type…"
+              options={activityOptions.map((name) => ({ value: name, label: name }))}
+            />
           </label>
         </div>
 

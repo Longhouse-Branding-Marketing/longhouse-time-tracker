@@ -2,18 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CaretDownIcon } from "@phosphor-icons/react";
+import { matchesContains } from "@/lib/contains";
 
-/** Case-insensitive contains: every whitespace-separated token must appear in the option. */
-export function matchesContains(option: string, query: string): boolean {
-  const haystack = option.toLowerCase();
-  const tokens = query
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-  if (tokens.length === 0) return true;
-  return tokens.every((token) => haystack.includes(token));
-}
+export { matchesContains };
 
 export function MultiSelect({
   label,
@@ -28,12 +19,13 @@ export function MultiSelect({
   selected: string[];
   onChange: (next: string[]) => void;
   fullWidth?: boolean;
-  /** Always show the search field (used for long lists like Activity Type). */
+  /** Type in the field to filter options with contains matching. */
   searchable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const showSearch = searchable || options.length > 8;
 
   function close() {
@@ -67,41 +59,91 @@ export function MultiSelect({
         ? selected[0]
         : `${selected.length} selected`;
 
-  const filtered = showSearch && query ? options.filter((o) => matchesContains(o, query)) : options;
+  const filtered =
+    showSearch && query ? options.filter((o) => matchesContains(o, query)) : options;
 
   return (
     <div className={fullWidth ? "relative w-full" : "relative"} ref={ref}>
-      <button
-        type="button"
-        onClick={() => {
-          if (open) close();
-          else {
-            setQuery("");
-            setOpen(true);
-          }
-        }}
+      <div
         aria-haspopup="listbox"
         aria-expanded={open}
         data-open={open}
         className={`lh-dropdown-trigger flex items-center rounded-md border touch-manipulation ${
           fullWidth
             ? "h-12 w-full max-w-none justify-between gap-3 px-3.5 text-base"
-            : "h-10 max-w-[180px] gap-1.5 px-2.5 text-[13px] md:h-8"
+            : "h-10 max-w-[220px] gap-1.5 px-2.5 text-[13px] md:h-8"
         } ${selected.length ? "border-brand-600 text-ink" : "text-ink"}`}
       >
         <span className="shrink-0 text-muted">{label}</span>
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-right font-medium">{summary}</span>
+        {showSearch ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={open ? query : summary}
+            placeholder={summary}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            aria-label={`Search ${label}`}
+            onFocus={() => {
+              setQuery("");
+              setOpen(true);
+            }}
+            onClick={() => {
+              setQuery("");
+              setOpen(true);
+            }}
+            onChange={(e) => {
+              setOpen(true);
+              setQuery(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.stopPropagation();
+                close();
+                inputRef.current?.blur();
+              }
+              if (e.key === "Enter") e.preventDefault();
+            }}
+            className={`min-w-0 flex-1 bg-transparent font-medium outline-none placeholder:text-ink ${
+              fullWidth ? "text-right text-base" : "text-right text-[13px]"
+            }`}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (open) close();
+              else setOpen(true);
+            }}
+            className="flex min-w-0 flex-1 items-center justify-end gap-2 bg-transparent"
+          >
+            <span className="truncate text-right font-medium">{summary}</span>
+          </button>
+        )}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={open ? "Close" : "Open"}
+          onClick={() => {
+            if (open) close();
+            else {
+              setQuery("");
+              setOpen(true);
+              if (showSearch) inputRef.current?.focus();
+            }
+          }}
+          className="shrink-0 text-muted"
+        >
           <CaretDownIcon
             size={fullWidth ? 16 : 14}
             weight="bold"
             aria-hidden
-            className={`shrink-0 text-muted transition-transform duration-150 ${
-              open ? "rotate-180" : ""
-            }`}
+            className={`transition-transform duration-150 ${open ? "rotate-180" : ""}`}
           />
-        </span>
-      </button>
+        </button>
+      </div>
       {open ? (
         <div
           className={
@@ -110,28 +152,6 @@ export function MultiSelect({
               : "lh-dropdown-panel absolute left-0 z-30 mt-1.5 w-64 p-1.5"
           }
         >
-          {showSearch ? (
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.stopPropagation();
-                  close();
-                }
-                if (e.key === "Enter") e.preventDefault();
-              }}
-              placeholder={`Search ${label.toLowerCase()}…`}
-              enterKeyHint="search"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              className={`lh-dropdown-input mb-1 w-full px-2.5 py-2 touch-manipulation ${
-                fullWidth ? "text-base" : "text-[13px]"
-              }`}
-            />
-          ) : null}
           {selected.length ? (
             <button
               type="button"
