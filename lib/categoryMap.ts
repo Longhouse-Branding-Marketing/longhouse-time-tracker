@@ -153,7 +153,7 @@ export function lookupTaskMap(
   const departmentKey = text(department);
   const roleKey = text(role);
   const taskKey = text(task);
-  if (!departmentKey || !taskKey) return null;
+  if (!departmentKey) return null;
   const key = lookupKey(departmentKey, roleKey, taskKey);
   return index.exactTasks.get(key) ?? index.normalizedTasks.get(key) ?? null;
 }

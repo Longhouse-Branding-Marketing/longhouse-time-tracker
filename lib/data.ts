@@ -27,6 +27,19 @@ export function getEntries(): Promise<EntryRow[]> {
   );
 }
 
+/** Comments only, so Review can show them without enlarging the dashboard payload. */
+export function getEntryComments(): Promise<Array<{ id: number; comments: string }>> {
+  return fetchAll<{ id: number; comments: string }>(
+    "v_time_entries_clean",
+    "id,comments",
+    (q) =>
+      q
+        .not("comments", "is", null)
+        .neq("comments", "")
+        .order("id", { ascending: true })
+  );
+}
+
 /** One person's entries with comments + created_at for the detail panel. */
 export function getPersonEntries(person: string): Promise<PersonEntryDetail[]> {
   return fetchAll<PersonEntryDetail>("v_time_entries_clean", PERSON_ENTRY_COLUMNS, (q) =>
