@@ -136,6 +136,9 @@ export function MultiSelect({
         )
       : null;
 
+  const valueClass =
+    selected.length > 0 ? "font-medium text-ink" : "font-normal text-ink";
+
   return (
     <div className={fullWidth ? "relative w-full" : "relative"} ref={ref}>
       <div
@@ -145,7 +148,7 @@ export function MultiSelect({
         className={`lh-dropdown-trigger flex items-center rounded-md border touch-manipulation ${
           fullWidth
             ? "h-12 w-full max-w-none justify-between gap-3 px-3.5 text-base"
-            : "h-10 max-w-[220px] gap-1.5 px-2.5 text-[13px] md:h-8"
+            : "h-8 max-w-[180px] gap-1.5 px-2.5 text-[13px]"
         } ${selected.length ? "border-brand-600 text-ink" : "text-ink"}`}
       >
         <span className="shrink-0 text-muted">{label}</span>
@@ -180,9 +183,9 @@ export function MultiSelect({
               }
               if (e.key === "Enter") e.preventDefault();
             }}
-            className={`min-w-0 flex-1 bg-transparent font-medium outline-none placeholder:text-ink ${
-              fullWidth ? "text-right text-base" : "text-right text-[13px]"
-            }`}
+            className={`min-w-0 flex-1 bg-transparent text-right outline-none placeholder:font-normal placeholder:text-ink ${
+              fullWidth ? "text-base" : "text-[13px]"
+            } ${open ? "font-normal text-ink" : valueClass}`}
           />
         ) : (
           <button
@@ -193,7 +196,7 @@ export function MultiSelect({
             }}
             className="flex min-w-0 flex-1 items-center justify-end gap-2 bg-transparent"
           >
-            <span className="truncate text-right font-medium">{summary}</span>
+            <span className={`truncate text-right ${valueClass}`}>{summary}</span>
           </button>
         )}
         <button

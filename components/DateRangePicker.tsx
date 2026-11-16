@@ -211,7 +211,7 @@ export function DateRangePicker({
         className={`lh-dropdown-trigger flex items-center gap-2 rounded-md border touch-manipulation disabled:cursor-not-allowed disabled:opacity-60 ${
           fullWidth
             ? "h-12 w-full justify-between px-3.5 text-base"
-            : "h-10 px-2.5 text-[13px] md:h-8"
+            : "h-8 px-2.5 text-[13px]"
         }`}
       >
         <CalendarBlankIcon
@@ -220,7 +220,7 @@ export function DateRangePicker({
           aria-hidden
           className="shrink-0 text-brand"
         />
-        <span className="min-w-0 flex-1 truncate font-medium text-ink">
+        <span className="min-w-0 flex-1 truncate font-normal text-ink">
           {hasBounds
             ? `${shortFormat(value.from)} – ${shortFormat(value.to)}`
             : "No time entries yet"}
