@@ -97,14 +97,14 @@ export function ReviewView({
   const searchParams = useSearchParams();
   const [localEntries, setLocalEntries] = useState(entries);
   const [localReview, setLocalReview] = useState(review);
-  const entriesSource = useRef(entries);
-  const reviewSource = useRef(review);
-  if (entries !== entriesSource.current) {
-    entriesSource.current = entries;
+  const [entriesProp, setEntriesProp] = useState(entries);
+  const [reviewProp, setReviewProp] = useState(review);
+  if (entries !== entriesProp) {
+    setEntriesProp(entries);
     setLocalEntries(entries);
   }
-  if (review !== reviewSource.current) {
-    reviewSource.current = review;
+  if (review !== reviewProp) {
+    setReviewProp(review);
     setLocalReview(review);
   }
 
