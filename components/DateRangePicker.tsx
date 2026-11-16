@@ -93,11 +93,13 @@ export function DateRangePicker({
   min,
   max,
   onChange,
+  fullWidth = false,
 }: {
   value: Range;
   min: string;
   max: string;
   onChange: (range: Range) => void;
+  fullWidth?: boolean;
 }) {
   const hasBounds = isIsoDate(min) && isIsoDate(max);
   const [open, setOpen] = useState(false);
@@ -188,7 +190,7 @@ export function DateRangePicker({
   ];
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={fullWidth ? "relative w-full" : "relative"} ref={ref}>
       <button
         type="button"
         disabled={!hasBounds}
@@ -206,7 +208,9 @@ export function DateRangePicker({
         aria-expanded={open}
         aria-disabled={!hasBounds}
         data-open={open}
-        className="lh-dropdown-trigger flex h-8 items-center gap-2 rounded-md border px-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-60"
+        className={`lh-dropdown-trigger flex h-10 items-center gap-2 rounded-md border px-2.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-60 md:h-8 ${
+          fullWidth ? "w-full justify-between" : ""
+        }`}
       >
         <CalendarBlankIcon
           size={16}
@@ -233,7 +237,11 @@ export function DateRangePicker({
         <div
           role="dialog"
           aria-label="Select date range"
-          className="lh-dropdown-panel absolute left-0 top-10 z-40 w-[480px] max-w-[92vw] overflow-hidden"
+          className={
+            fullWidth
+              ? "mt-2 w-full overflow-hidden rounded-xl border border-line bg-card"
+              : "lh-dropdown-panel absolute left-0 top-10 z-40 w-[480px] max-w-[92vw] overflow-hidden"
+          }
         >
           <div className="border-b border-line px-4 py-3">
             <p className="text-[12px] text-muted">
@@ -244,8 +252,14 @@ export function DateRangePicker({
             </p>
           </div>
 
-          <div className="flex">
-            <div className="w-[132px] shrink-0 border-r border-line p-2">
+          <div className={fullWidth ? "flex flex-col" : "flex"}>
+            <div
+              className={
+                fullWidth
+                  ? "flex gap-1 overflow-x-auto border-b border-line p-2"
+                  : "w-[132px] shrink-0 border-r border-line p-2"
+              }
+            >
               {presets.map((preset) => (
                 <button
                   key={preset.label}

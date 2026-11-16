@@ -41,10 +41,16 @@
 }
 
 :root {
-  /* Floating nav docks — reserve left gutter so content clears fixed docks. */
-  --dock-gutter: 5rem; /* ~80px: edge margin + compact dock + breathing room */
+  /* Phone uses a top bar. The side dock returns at md. */
+  --dock-gutter: 0.75rem;
   --z-dock: 40;
   --z-dock-tooltip: 50;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --dock-gutter: 5rem;
+  }
 }
 
 html {

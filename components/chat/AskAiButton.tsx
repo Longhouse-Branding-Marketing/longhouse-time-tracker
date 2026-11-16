@@ -7,7 +7,13 @@ import { ChatPanel } from "./ChatPanel";
 const ICON_GRAD_ID = "ask-ai-icon-grad";
 
 /** Dock-style Ask AI trigger — sits above the bottom-left workspace menu. */
-export function AskAiButton() {
+export function AskAiButton({
+  variant = "dock",
+  onOpen,
+}: {
+  variant?: "dock" | "row";
+  onOpen?: () => void;
+} = {}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -25,11 +31,39 @@ export function AskAiButton() {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
+  if (variant === "row") {
+    return (
+      <div ref={rootRef}>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen((value) => {
+              if (!value) onOpen?.();
+              return !value;
+            });
+          }}
+          aria-label="Ask AI about time tracking data"
+          aria-expanded={open}
+          className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[16px] font-medium text-ink hover:bg-tint"
+        >
+          <SparkleIcon size={22} weight="regular" aria-hidden className="text-heading" />
+          Ask AI
+        </button>
+        {open ? <ChatPanel onClose={() => setOpen(false)} /> : null}
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef} className="relative flex flex-col items-center">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setOpen((value) => {
+            if (!value) onOpen?.();
+            return !value;
+          });
+        }}
         aria-label="Ask AI about time tracking data"
         aria-expanded={open}
         className={`group relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${

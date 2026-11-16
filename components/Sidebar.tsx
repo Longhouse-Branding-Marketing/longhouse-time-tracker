@@ -9,11 +9,13 @@ import {
   ClockIcon,
   GearSixIcon,
   ListChecksIcon,
+  ListIcon,
   LightbulbIcon,
   SignOutIcon,
   UploadSimpleIcon,
   UsersThreeIcon,
   WrenchIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { refreshTimeTrackingData } from "@/app/actions";
 import { invalidateApiCache } from "@/lib/api";
@@ -258,7 +260,14 @@ export function Sidebar() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-y-0 left-0 z-[var(--z-dock)] flex w-[var(--dock-gutter)] flex-col justify-between px-3 py-4">
+    <>
+      <MobileAppBar
+        pathname={pathname}
+        refreshing={refreshing}
+        syncError={syncError}
+        onRefresh={refreshData}
+      />
+      <div className="pointer-events-none fixed inset-y-0 left-0 z-[var(--z-dock)] hidden w-[var(--dock-gutter)] flex-col justify-between px-3 py-4 md:flex">
       <DockCard aria-label="Primary navigation" className="gap-1 px-1.5 pt-3 pb-2">
         <Link
           href="/"
@@ -341,6 +350,163 @@ export function Sidebar() {
           <UserMenu />
         </DockCard>
       </div>
+    </div>
+    </>
+  );
+}
+
+function pageTitle(pathname: string): string {
+  if (pathname.startsWith("/people")) return "People";
+  if (pathname.startsWith("/review")) return "Review";
+  if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/import")) return "Import";
+  return "Time Dashboard";
+}
+
+function MobileAppBar({
+  pathname,
+  refreshing,
+  syncError,
+  onRefresh,
+}: {
+  pathname: string;
+  refreshing: boolean;
+  syncError: string | null;
+  onRefresh: () => void;
+}) {
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const open = openPath === pathname;
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenPath(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  return (
+    <div className="md:hidden">
+      <header className="sticky top-0 z-[var(--z-dock)] flex h-14 items-center gap-2 border-b border-line bg-card px-2">
+        <button
+          type="button"
+          aria-label={open ? "Close menu" : "Menu"}
+          aria-expanded={open}
+          onClick={() => setOpenPath(open ? null : pathname)}
+          className="flex h-11 w-11 items-center justify-center rounded-xl text-ink hover:bg-tint"
+        >
+          {open ? (
+            <XIcon size={22} weight="bold" aria-hidden />
+          ) : (
+            <ListIcon size={22} weight="bold" aria-hidden />
+          )}
+        </button>
+        <p className="min-w-0 flex-1 truncate text-[17px] font-semibold text-ink">
+          {pageTitle(pathname)}
+        </p>
+      </header>
+      {open ? (
+        <div className="fixed inset-x-0 top-14 bottom-0 z-[var(--z-dock)] overflow-y-auto bg-surface px-3 py-3">
+          <nav className="flex flex-col gap-1" aria-label="Primary">
+            {NAV.map(({ href, label, Icon }) => {
+              const active = isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setOpenPath(null)}
+                  className={`flex h-12 items-center gap-3 rounded-xl px-3 text-[16px] font-medium ${
+                    active ? "bg-brand text-white" : "text-ink hover:bg-card"
+                  }`}
+                >
+                  <Icon size={22} weight="regular" aria-hidden />
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-4 flex flex-col gap-1 border-t border-line pt-3">
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="flex h-12 items-center gap-3 rounded-xl px-3 text-left text-[16px] font-medium text-ink hover:bg-card disabled:opacity-60"
+            >
+              <ArrowsClockwiseIcon
+                size={22}
+                weight="regular"
+                aria-hidden
+                className={refreshing ? "animate-spin" : ""}
+              />
+              {refreshing ? "Syncing…" : "Sync Time Entries"}
+            </button>
+            <AskAiButton variant="row" onOpen={() => setOpenPath(null)} />
+            {USER_MENU_LINKS.map((item) => {
+              const href = "hub" in item ? hubMenuHref(item.hub) : item.href;
+              const external = "external" in item && item.external;
+              const className =
+                "flex h-12 items-center gap-3 rounded-xl px-3 text-[16px] font-medium text-ink hover:bg-card";
+              const content = (
+                <>
+                  <item.Icon size={22} weight="regular" aria-hidden className="text-muted" />
+                  {item.label}
+                </>
+              );
+              if (external) {
+                return (
+                  <a
+                    key={item.label}
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setOpenPath(null)}
+                    className={className}
+                  >
+                    {content}
+                  </a>
+                );
+              }
+              if (href.startsWith("#")) {
+                return (
+                  <a
+                    key={item.label}
+                    href={href}
+                    onClick={() => setOpenPath(null)}
+                    className={className}
+                  >
+                    {content}
+                  </a>
+                );
+              }
+              return (
+                <Link
+                  key={item.label}
+                  href={href}
+                  onClick={() => setOpenPath(null)}
+                  className={className}
+                >
+                  {content}
+                </Link>
+              );
+            })}
+            {syncError ? (
+              <p role="status" className="px-3 py-2 text-[13px] text-serious">
+                {syncError}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
