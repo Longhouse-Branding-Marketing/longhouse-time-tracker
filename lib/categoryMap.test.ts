@@ -299,4 +299,71 @@ describe("category crosswalk", () => {
     assert.equal(rows[0]?.status, "unmapped");
     assert.equal(rows[0]?.exceptions, 1);
   });
+
+  it("maps a logged row that has no task", () => {
+    const index = createCategoryIndex({
+      activityTypes: [
+        {
+          id: "AT",
+          name: "SEO Blog Copywriting",
+          billableType: "billable",
+          existsInMemtime: true,
+          isNewType: false,
+          group: null,
+          description: null,
+          sortOrder: 1,
+        },
+      ],
+      departments: [
+        {
+          oldId: "SEO",
+          oldName: "SEO",
+          oldMemtimeName: "SEO",
+          newId: "SEO",
+          newName: "SEO",
+          verifiedLive: true,
+        },
+      ],
+      roles: [],
+      tasks: [
+        {
+          id: "U1",
+          oldDepartment: "SEO",
+          oldDepartmentMemtime: "SEO",
+          oldRole: "Copywriter",
+          oldTask: "",
+          oldTaskNormalized: "",
+          newDepartment: "SEO",
+          newRole: "Specialist",
+          activityTypeId: "AT",
+          activityType: "SEO Blog Copywriting",
+          billableType: "billable",
+          historicalBillableRule: "keep_original",
+        },
+      ],
+    });
+    const mapped = applyCategoryMap(
+      {
+        id: 11,
+        person: "Sample",
+        date: "2026-03-01",
+        department: "SEO",
+        role: "Copywriter",
+        task: null,
+        type: null,
+        billable: "Non-Billable",
+        hours: 1,
+        comments: "Draft outline",
+        is_billable: false,
+        year_month: "2026-03",
+        source_time_range: null,
+      },
+      { index }
+    );
+    assert.equal(mapped.mapping_status, "mapped");
+    assert.equal(mapped.type, "SEO Blog Copywriting");
+    assert.equal(mapped.role, "Specialist");
+    assert.equal(mapped.raw_task, null);
+    assert.equal(lookupTaskMap("SEO", "Copywriter", null, index)?.id, "U1");
+  });
 });

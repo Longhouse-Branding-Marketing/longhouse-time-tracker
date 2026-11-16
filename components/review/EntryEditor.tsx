@@ -39,6 +39,7 @@ export type EditableEntry = {
   raw_type?: string | null;
   raw_billable?: string | null;
   mapping_status?: string;
+  comments?: string | null;
 };
 
 function shownBillable(value: string | null | undefined): "Billable" | "Non-Billable" {
@@ -145,6 +146,12 @@ export function EntryEditor({
           <ReadValue label="Billable" value={entry.raw_billable ?? entry.billable} />
           <ReadValue label="Person" value={entry.person} />
         </dl>
+        <div className="mt-3">
+          <p className="lh-meta-label">Comments</p>
+          <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink">
+            {entry.comments?.trim() || "—"}
+          </p>
+        </div>
 
         <h3 className="lh-section-title mt-6">Category</h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -198,20 +205,22 @@ export function EntryEditor({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="lh-meta-label">Billable</span>
-            <select
-              value={billable}
-              onChange={(event) =>
-                setBillable(event.target.value === "Billable" ? "Billable" : "Non-Billable")
-              }
-              className={fieldClass}
-            >
-              <option value="Billable">Billable</option>
-              <option value="Non-Billable">Non-Billable</option>
-            </select>
-          </label>
         </div>
+
+        <h3 className="lh-section-title mt-6">Billable</h3>
+        <label className="mt-3 flex max-w-xs flex-col gap-1">
+          <span className="lh-meta-label">Status</span>
+          <select
+            value={billable}
+            onChange={(event) =>
+              setBillable(event.target.value === "Billable" ? "Billable" : "Non-Billable")
+            }
+            className={fieldClass}
+          >
+            <option value="Billable">Billable</option>
+            <option value="Non-Billable">Non-Billable</option>
+          </select>
+        </label>
 
         <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
           {onEditMapping && !isNew ? (

@@ -123,7 +123,7 @@ export function MappingEditor({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1">
+          <label className="flex flex-col gap-1 sm:col-span-3">
             <span className="lh-meta-label">Activity Type</span>
             <select
               value={activityId}

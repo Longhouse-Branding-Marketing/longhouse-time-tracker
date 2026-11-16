@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { catalogIssues } from "@/lib/categoryMap";
 import { getCategoryCrosswalk, reviewCatalog } from "@/lib/categoryMapData";
+import { getEntryComments } from "@/lib/data";
 import {
   HubAccessError,
   requireHubAccessFromRequest,
@@ -9,8 +10,12 @@ import {
 export async function GET(request: Request) {
   try {
     await requireHubAccessFromRequest(request);
-    const crosswalk = await getCategoryCrosswalk();
+    const [crosswalk, comments] = await Promise.all([
+      getCategoryCrosswalk(),
+      getEntryComments().catch(() => []),
+    ]);
     return NextResponse.json({
+      comments,
       tasks: crosswalk.tasks,
       departments: crosswalk.departments.map((row) => ({
         oldName: row.oldName,

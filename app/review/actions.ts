@@ -78,14 +78,14 @@ export async function saveMapping(fd: FormData): Promise<ActionResult> {
 
   const oldDepartment = str(fd, "old_department");
   const oldRole = str(fd, "old_role");
-  const oldTask = str(fd, "old_task");
+  const oldTask = fd.get("old_task") === null ? "" : String(fd.get("old_task")).trim();
   const newDepartment = str(fd, "new_department");
   const newRole = str(fd, "new_role");
   const activityTypeId = str(fd, "activity_type_id");
   const ruleId = str(fd, "rule_id");
 
-  if (!oldDepartment || !oldTask || !newDepartment || !newRole || !activityTypeId) {
-    return { ok: false, error: "Department, role, task, and activity type are required" };
+  if (!oldDepartment || !newDepartment || !newRole || !activityTypeId) {
+    return { ok: false, error: "Department, role, and activity type are required" };
   }
 
   try {
