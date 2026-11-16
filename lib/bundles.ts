@@ -12,6 +12,7 @@ import {
 import { memoryCached } from "./memory-cache";
 import { applyCategoryMapToEntries } from "./categoryMap";
 import { getCategoryIndex, getEntryOverrides } from "./categoryMapData";
+import { normalizeEntriesPeople } from "./personLabels";
 import { applyScheduleHistory } from "./schedules";
 import { hasSupabaseServiceRole } from "./supabase";
 import type {
@@ -56,7 +57,7 @@ export type SettingsBundle = {
  * `bustMemoryCache()` whenever `revalidateTag(TIME_TRACKING_TAG)` runs.
  */
 export async function getDashboardBundle(): Promise<DashboardBundle> {
-  return memoryCached("dashboard-bundle-v10", async () => {
+  return memoryCached("dashboard-bundle-v11", async () => {
     const [entries, employees, kpis, dailyTracking, schedules, index, overrides] =
       await Promise.all([
       getEntries(),
@@ -68,7 +69,10 @@ export async function getDashboardBundle(): Promise<DashboardBundle> {
       getEntryOverrides(),
     ]);
     return {
-      entries: applyCategoryMapToEntries(entries, { index, overrides }),
+      entries: applyCategoryMapToEntries(
+        normalizeEntriesPeople(entries, employees),
+        { index, overrides }
+      ),
       employees,
       kpis,
       // Use each period's weekdays even if the database view is still on the

@@ -189,7 +189,7 @@ async function loadOverrides(): Promise<EntryOverride[]> {
 }
 
 export async function getCategoryCrosswalk(): Promise<CategoryCrosswalk> {
-  return memoryCached("category-crosswalk-v1", loadCrosswalk);
+  return memoryCached("category-crosswalk-v2", loadCrosswalk);
 }
 
 export async function getCategoryIndex(): Promise<CategoryIndex> {

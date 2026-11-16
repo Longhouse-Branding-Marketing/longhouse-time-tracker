@@ -41,7 +41,7 @@ export function useMenuPlacement(
       setPlacement({
         top,
         left: rect.left,
-        width: Math.max(rect.width, 180),
+        width: rect.width,
         maxHeight,
         openUp,
       });
