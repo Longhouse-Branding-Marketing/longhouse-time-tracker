@@ -28,7 +28,8 @@ import {
   type Filters,
 } from "@/lib/filtering";
 import { formatDate, hours } from "@/lib/formatters";
-import type { EntryRow } from "@/lib/types";
+import { activeEmployeeEntries } from "@/lib/personLabels";
+import type { Employee, EntryRow } from "@/lib/types";
 import { EntryEditor, type EntrySavePatch } from "./EntryEditor";
 import {
   fieldClass,
@@ -80,6 +81,7 @@ function matchesQuery(query: string, values: Array<string | null | undefined>): 
 
 export function ReviewView({
   entries,
+  employees,
   review,
   saveMapping,
   saveEntry,
@@ -87,6 +89,7 @@ export function ReviewView({
   updateEntries,
 }: {
   entries: EntryRow[];
+  employees: Employee[];
   review: ReviewPayload;
   saveMapping: SaveAction;
   saveEntry: SaveAction;
@@ -107,10 +110,17 @@ export function ReviewView({
     setLocalReview(review);
   }
 
+  // Former staff (Nick, Jay, Deleted User, …) stay in the DB but are excluded
+  // from Review the same way Home/People already exclude them.
+  const rosterEntries = useMemo(
+    () => activeEmployeeEntries(localEntries, employees),
+    [localEntries, employees]
+  );
+
   const index = useMemo(() => indexFromReview(localReview), [localReview]);
   const mappings = useMemo(
-    () => mappingList(index, localEntries),
-    [index, localEntries]
+    () => mappingList(index, rosterEntries),
+    [index, rosterEntries]
   );
   const requestedMapping = useMemo(() => {
     const rule = searchParams.get("rule");
@@ -128,8 +138,8 @@ export function ReviewView({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [savingBulk, setSavingBulk] = useState(false);
   const noticeTimer = useRef<number | null>(null);
-  const bounds = useMemo(() => dateBounds(localEntries), [localEntries]);
-  const filterOptions = useMemo(() => extractOptions(localEntries), [localEntries]);
+  const bounds = useMemo(() => dateBounds(rosterEntries), [rosterEntries]);
+  const filterOptions = useMemo(() => extractOptions(rosterEntries), [rosterEntries]);
   const fallbackFilters = useMemo(() => defaultFilters(bounds), [bounds]);
   const [filters, setFilters] = useState<Filters | null>(null);
   const [billableFilter, setBillableFilter] = useState<string[]>([]);
@@ -235,12 +245,12 @@ export function ReviewView({
   }, [mappings, needle]);
 
   const visibleEntries = useMemo(() => {
-    return applyFilters(localEntries, activeFilters).filter((row) => {
+    return applyFilters(rosterEntries, activeFilters).filter((row) => {
       if (!matchesBillable(row, billableFilter)) return false;
       if (scope && !entryMatchesMapping(row, scope, index)) return false;
       return true;
     });
-  }, [activeFilters, billableFilter, localEntries, index, scope]);
+  }, [activeFilters, billableFilter, rosterEntries, index, scope]);
 
   const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);

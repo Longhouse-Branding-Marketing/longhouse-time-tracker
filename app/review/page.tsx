@@ -12,10 +12,11 @@ import { ReviewView, type ReviewPayload } from "@/components/review/ReviewView";
 import { withRefetch } from "@/components/review/withRefetch";
 import { useApiData } from "@/lib/api";
 import { useAppendHubAccessToken } from "@/lib/hub/HubSessionContext";
-import type { EntryRow } from "@/lib/types";
+import type { Employee, EntryRow } from "@/lib/types";
 
 type DashboardPayload = {
   entries: EntryRow[];
+  employees: Employee[];
 };
 
 function ReviewPageBody() {
@@ -54,6 +55,7 @@ function ReviewPageBody() {
   return (
     <ReviewView
       entries={entriesData.entries}
+      employees={entriesData.employees}
       review={reviewData}
       saveMapping={actions.saveMapping}
       saveEntry={actions.saveEntry}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  activeEmployeeEntries,
   collapsePersonOptions,
   normalizeEntryPerson,
   normalizeEntriesPeople,
@@ -89,5 +90,36 @@ describe("normalizeEntriesPeople", () => {
     assert.equal(normalized[0].person, "Natasha");
     assert.equal(normalized[1].person, "Nick");
     assert.equal(normalized[2].person, "Nick");
+  });
+});
+
+describe("activeEmployeeEntries", () => {
+  it("drops former staff and keeps active people including email aliases", () => {
+    const entries = [
+      { id: 1, person: "Natasha", date: "2026-11-01" },
+      { id: 2, person: "natasha@longhouse.co", date: "2026-11-01" },
+      { id: 3, person: "Nick", date: "2026-11-01" },
+      { id: 4, person: "Deleted User", date: "2026-11-01" },
+      { id: 5, person: "Jay", date: "2026-11-01" },
+    ] as Array<{ id: number; person: string; date: string }>;
+
+    const employees = [
+      {
+        id: 1,
+        person: "Natasha",
+        photo_url: null,
+        active: true,
+        start_date: null,
+        end_date: null,
+        notes: null,
+        also_known_as: ["natasha@longhouse.co"],
+      },
+    ];
+
+    const active = activeEmployeeEntries(entries as never, employees as never);
+    assert.deepEqual(
+      active.map((row) => row.person),
+      ["Natasha", "Natasha"]
+    );
   });
 });
