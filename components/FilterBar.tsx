@@ -101,6 +101,7 @@ export function FilterBar({
         {hidden.has("type") ? null : (
           <MultiSelect
             fullWidth={fullWidth}
+            searchable
             label="Activity Type"
             options={options.types}
             selected={filters.types}
@@ -112,9 +113,13 @@ export function FilterBar({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-10 items-center gap-1 rounded-md px-2.5 text-[13px] font-medium text-brand-600 hover:bg-tint md:h-8"
+            className={`inline-flex items-center gap-1 rounded-md font-medium text-brand-600 touch-manipulation hover:bg-tint ${
+              fullWidth
+                ? "h-11 w-full justify-center px-3 text-base"
+                : "h-10 px-2.5 text-[13px] md:h-8"
+            }`}
           >
-            <XIcon size={14} weight="bold" aria-hidden />
+            <XIcon size={fullWidth ? 16 : 14} weight="bold" aria-hidden />
             Clear
           </button>
         ) : null}
@@ -128,14 +133,14 @@ export function FilterBar({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className={`lh-dropdown-trigger inline-flex h-10 items-center gap-2 rounded-md border px-3 text-[13px] font-medium ${
+          className={`lh-dropdown-trigger inline-flex h-10 items-center gap-2 rounded-md border px-3 text-base font-medium touch-manipulation ${
             active ? "border-brand-600 text-ink" : "text-ink"
           }`}
         >
           <SlidersHorizontalIcon size={16} weight="bold" aria-hidden />
           Filters
           {active > 0 ? (
-            <span className="rounded-md bg-brand px-1.5 py-0.5 text-[11px] font-medium text-white">
+            <span className="rounded-md bg-brand px-1.5 py-0.5 text-[12px] font-medium text-white">
               {active}
             </span>
           ) : null}
@@ -180,7 +185,7 @@ function FilterSheet({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 md:hidden">
+    <div className="fixed inset-0 z-50 touch-manipulation md:hidden">
       <button
         type="button"
         aria-label="Close"
@@ -191,10 +196,10 @@ function FilterSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,720px)] flex-col rounded-t-2xl bg-card px-4 pt-3 pb-6 shadow-[0_-12px_40px_rgba(2,22,61,0.16)]"
+        className="absolute inset-x-0 bottom-0 flex max-h-[min(88dvh,720px)] flex-col overflow-hidden rounded-t-2xl bg-card px-4 pt-3 shadow-[0_-12px_40px_rgba(2,22,61,0.16)] pb-[max(1.25rem,env(safe-area-inset-bottom))]"
       >
-        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-line" />
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 id={titleId} className="lh-section-title">
             Filters
           </h2>
@@ -202,16 +207,18 @@ function FilterSheet({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1.5 text-muted hover:bg-tint hover:text-ink"
+            className="rounded-md p-2 text-muted touch-manipulation hover:bg-tint hover:text-ink"
           >
-            <XIcon size={16} weight="bold" aria-hidden />
+            <XIcon size={18} weight="bold" aria-hidden />
           </button>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">{children}</div>
+        <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-x-hidden overflow-y-auto overscroll-contain">
+          {children}
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="mt-5 h-11 w-full rounded-md bg-brand text-[15px] font-medium text-white"
+          className="mt-4 h-12 w-full shrink-0 rounded-md bg-brand text-base font-medium text-white touch-manipulation"
         >
           Done
         </button>

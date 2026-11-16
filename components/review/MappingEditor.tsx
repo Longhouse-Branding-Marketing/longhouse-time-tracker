@@ -16,6 +16,16 @@ import {
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
 
+export type MappingSavePatch = {
+  department: string;
+  role: string;
+  task: string;
+  newDepartment: string;
+  newRole: string;
+  activityTypeId: string;
+  activityType: string;
+};
+
 function impact(row: MappingListRow): string {
   const hours = n(row.hours).toLocaleString(undefined, { maximumFractionDigits: 1 });
   return `${row.entries.toLocaleString()} Entries · ${hours} Hours`;
@@ -34,7 +44,7 @@ export function MappingEditor({
   saveAction: SaveAction;
   onClose: () => void;
   onViewEntries: () => void;
-  onSaved?: () => void;
+  onSaved?: (patch: MappingSavePatch) => void;
 }) {
   const initialActivity =
     catalog.activityTypes.find((row) => row.name === mapping.activityType)?.id ?? "";
@@ -72,7 +82,16 @@ export function MappingEditor({
       setError(result.error ?? "Save failed");
       return;
     }
-    onSaved?.();
+    const activity = catalog.activityTypes.find((row) => row.id === activityId);
+    onSaved?.({
+      department: mapping.department,
+      role: mapping.role,
+      task: mapping.task,
+      newDepartment: department,
+      newRole: role,
+      activityTypeId: activityId,
+      activityType: activity?.name ?? "",
+    });
     onClose();
   }
 

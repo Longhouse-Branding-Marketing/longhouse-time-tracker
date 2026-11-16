@@ -9,6 +9,7 @@ import { MultiSelect } from "@/components/MultiSelect";
 import { EditModal } from "@/components/settings/EditModal";
 import { EmptyRow, PageHeader, PageShell, Panel } from "@/components/ui";
 import {
+  applyCategoryMap,
   entryMatchesMapping,
   indexFromReview,
   isPartnerBillableReview,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/filtering";
 import { formatDate, hours } from "@/lib/formatters";
 import type { EntryRow } from "@/lib/types";
-import { EntryEditor } from "./EntryEditor";
+import { EntryEditor, type EntrySavePatch } from "./EntryEditor";
 import {
   fieldClass,
   primaryButtonClass,
@@ -35,7 +36,7 @@ import {
   rolesForDepartment,
   withCurrent,
 } from "./fields";
-import { MappingEditor } from "./MappingEditor";
+import { MappingEditor, type MappingSavePatch } from "./MappingEditor";
 
 type SaveAction = (fd: FormData) => Promise<ActionResult>;
 
@@ -93,8 +94,24 @@ export function ReviewView({
   updateEntries: SaveAction;
 }) {
   const searchParams = useSearchParams();
-  const index = useMemo(() => indexFromReview(review), [review]);
-  const mappings = useMemo(() => mappingList(index, entries), [index, entries]);
+  const [localEntries, setLocalEntries] = useState(entries);
+  const [localReview, setLocalReview] = useState(review);
+  const entriesSource = useRef(entries);
+  const reviewSource = useRef(review);
+  if (entries !== entriesSource.current) {
+    entriesSource.current = entries;
+    setLocalEntries(entries);
+  }
+  if (review !== reviewSource.current) {
+    reviewSource.current = review;
+    setLocalReview(review);
+  }
+
+  const index = useMemo(() => indexFromReview(localReview), [localReview]);
+  const mappings = useMemo(
+    () => mappingList(index, localEntries),
+    [index, localEntries]
+  );
   const requestedMapping = useMemo(() => {
     const rule = searchParams.get("rule");
     const unmapped = searchParams.get("unmapped");
@@ -111,19 +128,19 @@ export function ReviewView({
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [savingBulk, setSavingBulk] = useState(false);
   const noticeTimer = useRef<number | null>(null);
-  const bounds = useMemo(() => dateBounds(entries), [entries]);
-  const filterOptions = useMemo(() => extractOptions(entries), [entries]);
+  const bounds = useMemo(() => dateBounds(localEntries), [localEntries]);
+  const filterOptions = useMemo(() => extractOptions(localEntries), [localEntries]);
   const fallbackFilters = useMemo(() => defaultFilters(bounds), [bounds]);
   const [filters, setFilters] = useState<Filters | null>(null);
   const [billableFilter, setBillableFilter] = useState<string[]>([]);
   const activeFilters = filters ?? fallbackFilters;
   const comments = useMemo(() => {
     const map = new Map<number, string>();
-    for (const row of review.comments ?? []) {
+    for (const row of localReview.comments ?? []) {
       if (row.comments.trim()) map.set(row.id, row.comments);
     }
     return map;
-  }, [review.comments]);
+  }, [localReview.comments]);
   const [scope, setScope] = useState<MappingListRow | null>(null);
   const [mappingChoice, setMappingChoice] = useState<MappingListRow | null>(null);
   const [queryDismissed, setQueryDismissed] = useState(false);
@@ -153,6 +170,61 @@ export function ReviewView({
     setMappingChoice(row);
   }
 
+  function patchEntries(ids: number[], fields: Partial<EntryRow>) {
+    const idSet = new Set(ids);
+    setLocalEntries((current) =>
+      current.map((row) => (idSet.has(row.id) ? { ...row, ...fields } : row))
+    );
+    setSelected((current) => current.filter((id) => !idSet.has(id)));
+  }
+
+  function applyEntrySaved(patch: EntrySavePatch) {
+    patchEntries([patch.id], {
+      department: patch.department,
+      role: patch.role,
+      type: patch.type,
+      billable: patch.billable,
+      is_billable: patch.is_billable,
+      mapping_status: patch.mapping_status,
+    });
+    showSaved();
+  }
+
+  function applyMappingSaved(patch: MappingSavePatch) {
+    const task: TaskRow = {
+      id: `local-${patch.department}\0${patch.role}\0${patch.task}`,
+      oldDepartment: patch.department,
+      oldDepartmentMemtime: patch.department,
+      oldRole: patch.role || null,
+      oldTask: patch.task,
+      oldTaskNormalized: patch.task,
+      newDepartment: patch.newDepartment,
+      newRole: patch.newRole,
+      activityTypeId: patch.activityTypeId,
+      activityType: patch.activityType,
+      billableType: "",
+      historicalBillableRule: "keep_original",
+    };
+    const sameRule = (row: TaskRow) =>
+      row.oldDepartment === task.oldDepartment &&
+      (row.oldRole ?? "") === (task.oldRole ?? "") &&
+      row.oldTask === task.oldTask;
+    const tasks = localReview.tasks.some(sameRule)
+      ? localReview.tasks.map((row) => (sameRule(row) ? { ...row, ...task, id: row.id } : row))
+      : [...localReview.tasks, task];
+    const nextReview = { ...localReview, tasks };
+    const nextIndex = indexFromReview(nextReview);
+    setLocalReview(nextReview);
+    setLocalEntries((rows) =>
+      rows.map((row) =>
+        row.mapping_status === "override"
+          ? row
+          : applyCategoryMap(row, { index: nextIndex })
+      )
+    );
+    showSaved();
+  }
+
   const needle = query.trim().toLowerCase();
 
   const visibleMappings = useMemo(() => {
@@ -163,12 +235,12 @@ export function ReviewView({
   }, [mappings, needle]);
 
   const visibleEntries = useMemo(() => {
-    return applyFilters(entries, activeFilters).filter((row) => {
+    return applyFilters(localEntries, activeFilters).filter((row) => {
       if (!matchesBillable(row, billableFilter)) return false;
       if (scope && !entryMatchesMapping(row, scope, index)) return false;
       return true;
     });
-  }, [activeFilters, billableFilter, entries, index, scope]);
+  }, [activeFilters, billableFilter, localEntries, index, scope]);
 
   const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -230,7 +302,18 @@ export function ReviewView({
       setBulkError(result.error ?? "Save failed");
       return;
     }
-    setSelected([]);
+    const patch: Partial<EntryRow> = {};
+    if (fields.billable) {
+      patch.billable = fields.billable;
+      patch.is_billable = fields.billable === "Billable";
+    }
+    if (fields.department && fields.role && fields.activityType) {
+      patch.department = fields.department;
+      patch.role = fields.role;
+      patch.type = fields.activityType;
+      patch.mapping_status = "override";
+    }
+    patchEntries(selected, patch);
     setBulkCategory(false);
     showSaved();
   }
@@ -542,10 +625,10 @@ export function ReviewView({
       {mapping ? (
         <MappingEditor
           mapping={mapping}
-          catalog={review.catalog}
+          catalog={localReview.catalog}
           saveAction={saveMapping}
           onClose={() => chooseMapping(null)}
-          onSaved={showSaved}
+          onSaved={applyMappingSaved}
           onViewEntries={() => {
             setScope(mapping);
             setSection("Entries");
@@ -559,11 +642,11 @@ export function ReviewView({
         <EntryEditor
           entry={entry}
           index={index}
-          catalog={review.catalog}
+          catalog={localReview.catalog}
           saveAction={saveEntry}
           clearAction={clearCategory}
           onClose={() => setEntry(null)}
-          onSaved={showSaved}
+          onSaved={applyEntrySaved}
           onEditMapping={() => openMappingForEntry(entry)}
         />
       ) : null}
@@ -571,7 +654,7 @@ export function ReviewView({
       {bulkCategory ? (
         <BulkCategoryEditor
           count={selected.length}
-          catalog={review.catalog}
+          catalog={localReview.catalog}
           pending={savingBulk}
           error={bulkError}
           onClose={() => setBulkCategory(false)}
