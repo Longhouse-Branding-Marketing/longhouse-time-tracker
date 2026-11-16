@@ -86,7 +86,11 @@ export function MultiSelect({
             style={{
               top: placement.top,
               left: placement.left,
-              width: Math.max(placement.width, fullWidth ? placement.width : 256),
+              // Match the trigger; only widen searchable menus so long Activity
+              // Type labels stay readable without bloating Person/Department.
+              width: fullWidth
+                ? placement.width
+                : Math.max(placement.width, searchable ? 220 : placement.width),
               maxHeight: placement.maxHeight,
               transformOrigin: placement.openUp ? "bottom left" : "top left",
             }}
@@ -148,7 +152,7 @@ export function MultiSelect({
         className={`lh-dropdown-trigger flex items-center rounded-md border touch-manipulation ${
           fullWidth
             ? "h-12 w-full max-w-none justify-between gap-3 px-3.5 text-base"
-            : "h-8 max-w-[180px] gap-1.5 px-2.5 text-[13px]"
+            : "h-8 max-w-[150px] gap-1.5 px-2.5 text-[13px]"
         } ${selected.length ? "border-brand-600 text-ink" : "text-ink"}`}
       >
         <span className="shrink-0 text-muted">{label}</span>

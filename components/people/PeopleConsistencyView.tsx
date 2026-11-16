@@ -26,6 +26,7 @@ import {
   withoutDepartments,
   type Filters,
 } from "@/lib/filtering";
+import { activeEmployeeEntries } from "@/lib/personLabels";
 import {
   initialDashboardFilters,
   reconcileStoredFilters,
@@ -53,12 +54,10 @@ export function PeopleConsistencyView({
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const { setSnapshot, clearSnapshot } = useDashboardFilters();
 
-  const activeEntries = useMemo(() => {
-    const active = new Set(
-      employees.filter((e) => e.active).map((e) => e.person)
-    );
-    return entries.filter((row) => active.has(row.person));
-  }, [entries, employees]);
+  const activeEntries = useMemo(
+    () => activeEmployeeEntries(entries, employees),
+    [entries, employees]
+  );
 
   const bounds = useMemo(() => dateBounds(activeEntries), [activeEntries]);
   const options = useMemo(() => extractOptions(activeEntries), [activeEntries]);

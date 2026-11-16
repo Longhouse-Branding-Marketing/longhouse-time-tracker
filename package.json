@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3007",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --import ./lib/import/register-ts-resolver.mjs --test lib/import/hash-dedup.test.mjs lib/import/resolvePerson.test.ts lib/import/import-stream.test.ts lib/import/memtime.test.ts lib/aggregate-person-ops.test.ts lib/schedules.test.ts lib/categoryMap.test.ts"
+    "test": "node --experimental-strip-types --import ./lib/import/register-ts-resolver.mjs --test lib/import/hash-dedup.test.mjs lib/import/resolvePerson.test.ts lib/import/import-stream.test.ts lib/import/memtime.test.ts lib/aggregate-person-ops.test.ts lib/schedules.test.ts lib/categoryMap.test.ts lib/personLabels.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

@@ -15,6 +15,7 @@ import {
   type Filters,
 } from "@/lib/filtering";
 import { n } from "@/lib/formatters";
+import { activeEmployeeEntries } from "@/lib/personLabels";
 import { KPI_EXCLUDED_STATUS } from "@/lib/types";
 import { mergeSliceFilters, type SliceFilters } from "./filters";
 
@@ -25,10 +26,7 @@ export type ChatToolContext = {
 
 async function loadSlice(ctx: ChatToolContext, override: SliceFilters = {}) {
   const bundle = await getDashboardBundle();
-  const activePeople = new Set(
-    bundle.employees.filter((e) => e.active).map((e) => e.person)
-  );
-  const activeEntries = bundle.entries.filter((r) => activePeople.has(r.person));
+  const activeEntries = activeEmployeeEntries(bundle.entries, bundle.employees);
   const filters = mergeSliceFilters(
     ctx.baseFilters,
     ctx.useDashboardFilters,

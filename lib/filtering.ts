@@ -1,3 +1,7 @@
+import {
+  collapsePersonOptions,
+  personMatchesSelection,
+} from "./personLabels";
 import type { EntryRow } from "./types";
 
 export type FilterableEntry = Pick<
@@ -48,7 +52,7 @@ export function dateBounds(rows: EntryRow[]): DateBounds {
 
 export function extractOptions(rows: EntryRow[]): FilterOptions {
   return {
-    people: uniqueSorted(rows.map((r) => r.person)),
+    people: collapsePersonOptions(rows.map((r) => r.person)),
     departments: uniqueSorted(rows.map((r) => r.department)),
     roles: uniqueSorted(rows.map((r) => r.role)),
     tasks: uniqueSorted(rows.map((r) => r.task)),
@@ -80,7 +84,7 @@ export function applyFilters<T extends FilterableEntry>(
   return rows.filter((r) => {
     if (f.from && r.date < f.from) return false;
     if (f.to && r.date > f.to) return false;
-    if (people.size && !people.has(r.person)) return false;
+    if (people.size && !personMatchesSelection(r.person, people)) return false;
     if (depts.size && !(r.department && depts.has(r.department))) return false;
     if (roles.size && !(r.role && roles.has(r.role))) return false;
     if (types.size && !(r.type && types.has(r.type))) return false;
