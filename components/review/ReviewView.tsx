@@ -53,6 +53,7 @@ export type ReviewPayload = {
 type Section = "Mapping" | "Entries" | "Checks";
 
 const PAGE_SIZE = 200;
+const SAVED_FLASH_MS = 3200;
 
 const SECTIONS: Section[] = ["Mapping", "Entries", "Checks"];
 const BILLABLE_OPTIONS = ["Billable", "Non-Billable", "Billable Review"];
@@ -60,6 +61,10 @@ const BILLABLE_OPTIONS = ["Billable", "Non-Billable", "Billable Review"];
 function blank(value: string | null | undefined): string {
   const text = value?.trim();
   return text ? text : "—";
+}
+
+function mappingIdentity(row: Pick<MappingListRow, "department" | "role" | "task">): string {
+  return `${row.department}\0${row.role}\0${row.task}`;
 }
 
 function matchesBillable(
@@ -137,7 +142,11 @@ export function ReviewView({
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [savingBulk, setSavingBulk] = useState(false);
+  const [recentMappings, setRecentMappings] = useState<MappingListRow[]>([]);
+  const [flashEntryIds, setFlashEntryIds] = useState<number[]>([]);
   const noticeTimer = useRef<number | null>(null);
+  const recentMappingTimers = useRef<Map<string, number>>(new Map());
+  const entryFlashTimers = useRef<Map<number, number>>(new Map());
   const bounds = useMemo(() => dateBounds(rosterEntries), [rosterEntries]);
   const filterOptions = useMemo(() => extractOptions(rosterEntries), [rosterEntries]);
   const fallbackFilters = useMemo(() => defaultFilters(bounds), [bounds]);
@@ -188,6 +197,43 @@ export function ReviewView({
     setSelected((current) => current.filter((id) => !idSet.has(id)));
   }
 
+  function showSaved(message = "Saved") {
+    setNotice(message);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), SAVED_FLASH_MS);
+  }
+
+  function pinRecentMapping(row: MappingListRow) {
+    const identity = mappingIdentity(row);
+    setRecentMappings((current) => [
+      row,
+      ...current.filter((item) => mappingIdentity(item) !== identity),
+    ]);
+    const existing = recentMappingTimers.current.get(identity);
+    if (existing) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      setRecentMappings((current) =>
+        current.filter((item) => mappingIdentity(item) !== identity)
+      );
+      recentMappingTimers.current.delete(identity);
+    }, SAVED_FLASH_MS);
+    recentMappingTimers.current.set(identity, timer);
+  }
+
+  function flashEntries(ids: number[]) {
+    if (ids.length === 0) return;
+    setFlashEntryIds((current) => Array.from(new Set([...current, ...ids])));
+    for (const id of ids) {
+      const existing = entryFlashTimers.current.get(id);
+      if (existing) window.clearTimeout(existing);
+      const timer = window.setTimeout(() => {
+        setFlashEntryIds((current) => current.filter((item) => item !== id));
+        entryFlashTimers.current.delete(id);
+      }, SAVED_FLASH_MS);
+      entryFlashTimers.current.set(id, timer);
+    }
+  }
+
   function applyEntrySaved(patch: EntrySavePatch) {
     patchEntries([patch.id], {
       department: patch.department,
@@ -197,7 +243,8 @@ export function ReviewView({
       is_billable: patch.is_billable,
       mapping_status: patch.mapping_status,
     });
-    showSaved();
+    flashEntries([patch.id]);
+    showSaved("Entry updated");
   }
 
   function applyMappingSaved(patch: MappingSavePatch) {
@@ -224,6 +271,28 @@ export function ReviewView({
       : [...localReview.tasks, task];
     const nextReview = { ...localReview, tasks };
     const nextIndex = indexFromReview(nextReview);
+    const prior = mappings.find(
+      (row) =>
+        row.department === patch.department &&
+        row.role === patch.role &&
+        row.task === patch.task
+    );
+    const affectedIds = rosterEntries
+      .filter((row) => {
+        if (row.mapping_status === "override") return false;
+        return entryMatchesMapping(
+          row,
+          {
+            ruleId: null,
+            department: patch.department,
+            role: patch.role,
+            task: patch.task,
+          },
+          index
+        );
+      })
+      .map((row) => row.id);
+
     setLocalReview(nextReview);
     setLocalEntries((rows) =>
       rows.map((row) =>
@@ -232,25 +301,78 @@ export function ReviewView({
           : applyCategoryMap(row, { index: nextIndex })
       )
     );
-    showSaved();
+    pinRecentMapping({
+      key: `recent:${mappingIdentity(patch)}`,
+      ruleId: task.id,
+      department: patch.department,
+      role: patch.role,
+      task: patch.task,
+      newDepartment: patch.newDepartment,
+      newRole: patch.newRole,
+      activityType: patch.activityType,
+      entries: prior?.entries ?? affectedIds.length,
+      hours: prior?.hours ?? 0,
+      exceptions: prior?.exceptions ?? 0,
+      status: "confirmed",
+    });
+    flashEntries(affectedIds);
+    showSaved("Mapping saved");
   }
 
   const needle = query.trim().toLowerCase();
+  const flashEntrySet = useMemo(() => new Set(flashEntryIds), [flashEntryIds]);
+  const recentMappingIdentities = useMemo(
+    () => new Set(recentMappings.map((row) => mappingIdentity(row))),
+    [recentMappings]
+  );
 
   const visibleMappings = useMemo(() => {
-    return mappings.filter((row) => {
+    const unmapped = mappings.filter((row) => {
       if (row.status !== "unmapped") return false;
-      return matchesQuery(needle, [row.department, row.role, row.task]);
+      if (recentMappingIdentities.has(mappingIdentity(row))) return false;
+      return matchesQuery(needle, [
+        row.department,
+        row.role,
+        row.task,
+        row.newDepartment,
+        row.newRole,
+        row.activityType,
+      ]);
     });
-  }, [mappings, needle]);
+    const recent = recentMappings.filter((row) =>
+      matchesQuery(needle, [
+        row.department,
+        row.role,
+        row.task,
+        row.newDepartment,
+        row.newRole,
+        row.activityType,
+      ])
+    );
+    return [...recent, ...unmapped];
+  }, [mappings, needle, recentMappingIdentities, recentMappings]);
 
   const visibleEntries = useMemo(() => {
-    return applyFilters(rosterEntries, activeFilters).filter((row) => {
+    const matchesRow = (row: EntryRow) => {
       if (!matchesBillable(row, billableFilter)) return false;
       if (scope && !entryMatchesMapping(row, scope, index)) return false;
       return true;
-    });
-  }, [activeFilters, billableFilter, rosterEntries, index, scope]);
+    };
+    const filtered = applyFilters(rosterEntries, activeFilters).filter(matchesRow);
+    if (flashEntrySet.size === 0) return filtered;
+    const filteredIds = new Set(filtered.map((row) => row.id));
+    const held = rosterEntries.filter(
+      (row) => flashEntrySet.has(row.id) && !filteredIds.has(row.id)
+    );
+    return held.length > 0 ? [...held, ...filtered] : filtered;
+  }, [
+    activeFilters,
+    billableFilter,
+    flashEntrySet,
+    index,
+    rosterEntries,
+    scope,
+  ]);
 
   const pageCount = Math.max(1, Math.ceil(visibleEntries.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -258,12 +380,6 @@ export function ReviewView({
     currentPage * PAGE_SIZE,
     currentPage * PAGE_SIZE + PAGE_SIZE
   );
-
-  function showSaved() {
-    setNotice("Saved");
-    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
-    noticeTimer.current = window.setTimeout(() => setNotice(null), 2500);
-  }
 
   function openMappingForEntry(row: EntryRow) {
     const match = mappings.find((item) => entryMatchesMapping(row, item, index));
@@ -324,8 +440,9 @@ export function ReviewView({
       patch.mapping_status = "override";
     }
     patchEntries(selected, patch);
+    flashEntries(selected);
     setBulkCategory(false);
-    showSaved();
+    showSaved(selected.length === 1 ? "Entry updated" : "Entries updated");
   }
 
   const countLabel =
@@ -500,32 +617,49 @@ export function ReviewView({
                     <th>Department</th>
                     <th>Role</th>
                     <th>Task</th>
+                    <th>Mapped Department</th>
+                    <th>Mapped Role</th>
+                    <th>Activity Type</th>
                     <th className="whitespace-nowrap text-right">Entries</th>
                     <th className="whitespace-nowrap text-right">Hours</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleMappings.map((row) => (
-                    <tr
-                      key={row.key}
-                      tabIndex={0}
-                      className="cursor-pointer"
-                      onClick={() => chooseMapping(row)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") chooseMapping(row);
-                      }}
-                    >
-                      <td>{blank(row.department)}</td>
-                      <td>{blank(row.role)}</td>
-                      <td className="font-medium text-ink">{blank(row.task)}</td>
-                      <td className="whitespace-nowrap text-right tabular-nums">
-                        {row.entries.toLocaleString()}
-                      </td>
-                      <td className="whitespace-nowrap text-right tabular-nums">
-                        {hours(row.hours)}
-                      </td>
-                    </tr>
-                  ))}
+                  {visibleMappings.map((row) => {
+                    const justSaved = recentMappingIdentities.has(mappingIdentity(row));
+                    return (
+                      <tr
+                        key={row.key}
+                        tabIndex={0}
+                        className={`cursor-pointer ${
+                          justSaved ? "bg-positive-soft/90" : ""
+                        }`}
+                        onClick={() => chooseMapping(row)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") chooseMapping(row);
+                        }}
+                      >
+                        <td>{blank(row.department)}</td>
+                        <td>{blank(row.role)}</td>
+                        <td className="font-medium text-ink">{blank(row.task)}</td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.newDepartment)}
+                        </td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.newRole)}
+                        </td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.activityType)}
+                        </td>
+                        <td className="whitespace-nowrap text-right tabular-nums">
+                          {row.entries.toLocaleString()}
+                        </td>
+                        <td className="whitespace-nowrap text-right tabular-nums">
+                          {hours(row.hours)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -560,44 +694,55 @@ export function ReviewView({
                   </tr>
                 </thead>
                 <tbody>
-                  {pageEntries.map((row) => (
-                    <tr
-                      key={row.id}
-                      tabIndex={0}
-                      className="cursor-pointer"
-                      onClick={() => setEntry({ ...row, comments: comments.get(row.id) ?? null })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          setEntry({ ...row, comments: comments.get(row.id) ?? null });
-                        }
-                      }}
-                    >
-                      <td
-                        onClick={(event) => event.stopPropagation()}
-                        onKeyDown={(event) => event.stopPropagation()}
+                  {pageEntries.map((row) => {
+                    const justSaved = flashEntrySet.has(row.id);
+                    return (
+                      <tr
+                        key={row.id}
+                        tabIndex={0}
+                        className={`cursor-pointer ${
+                          justSaved ? "bg-positive-soft/90" : ""
+                        }`}
+                        onClick={() => setEntry({ ...row, comments: comments.get(row.id) ?? null })}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            setEntry({ ...row, comments: comments.get(row.id) ?? null });
+                          }
+                        }}
                       >
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${row.person} ${row.date}`}
-                          checked={selected.includes(row.id)}
-                          onChange={() => toggleRow(row.id)}
-                          className="h-3.5 w-3.5 accent-[color:var(--color-brand)]"
-                        />
-                      </td>
-                      <td className="whitespace-nowrap tabular-nums">{formatDate(row.date)}</td>
-                      <td className="whitespace-nowrap">{row.person}</td>
-                      <td className="whitespace-nowrap text-right tabular-nums">{hours(row.hours)}</td>
-                      <td>{blank(row.department)}</td>
-                      <td>{blank(row.role)}</td>
-                      <td>{blank(row.type)}</td>
-                      <td className="whitespace-nowrap">{blank(row.billable)}</td>
-                      <td className="max-w-[220px]">
-                        <span className="line-clamp-2 text-[12px] text-muted">
-                          {comments.get(row.id)?.trim() || "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                        <td
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${row.person} ${row.date}`}
+                            checked={selected.includes(row.id)}
+                            onChange={() => toggleRow(row.id)}
+                            className="h-3.5 w-3.5 accent-[color:var(--color-brand)]"
+                          />
+                        </td>
+                        <td className="whitespace-nowrap tabular-nums">{formatDate(row.date)}</td>
+                        <td className="whitespace-nowrap">{row.person}</td>
+                        <td className="whitespace-nowrap text-right tabular-nums">{hours(row.hours)}</td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.department)}
+                        </td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.role)}
+                        </td>
+                        <td className={justSaved ? "font-medium text-positive" : undefined}>
+                          {blank(row.type)}
+                        </td>
+                        <td className="whitespace-nowrap">{blank(row.billable)}</td>
+                        <td className="max-w-[220px]">
+                          <span className="line-clamp-2 text-[12px] text-muted">
+                            {comments.get(row.id)?.trim() || "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
