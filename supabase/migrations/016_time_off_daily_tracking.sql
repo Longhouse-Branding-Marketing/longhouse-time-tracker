@@ -206,5 +206,7 @@ JOIN eligible e ON e.person = t.person
 LEFT JOIN median_source m ON m.person = t.person
 ORDER BY t.avg_working_day DESC NULLS LAST;
 
-GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated;
-GRANT SELECT ON public.v_operations_kpi TO anon, authenticated;
+-- service_role is required: the Next.js server reads these views with the
+-- service role key. DROP VIEW clears prior grants, so recreate them here.
+GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated, service_role;
+GRANT SELECT ON public.v_operations_kpi TO anon, authenticated, service_role;
