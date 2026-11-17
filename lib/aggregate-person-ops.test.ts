@@ -72,7 +72,6 @@ const filters = {
   roles: [] as string[],
   tasks: [] as string[],
   types: [] as string[],
-  includeTimeOff: false,
 };
 
 describe("computePersonOperations", () => {
@@ -94,7 +93,6 @@ describe("computePersonOperations", () => {
     assert.equal(row.trackedHours, 16);
     assert.equal(row.countedWorkingDays, 2);
     assert.equal(row.avgWorkingDay, 7);
-    assert.equal(row.hoursPerWorkingWeek, 35);
     assert.equal(row.medianActiveDay, 7);
     assert.equal(row.status, "On track");
   });

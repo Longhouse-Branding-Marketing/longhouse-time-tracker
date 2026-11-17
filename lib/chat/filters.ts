@@ -29,7 +29,6 @@ export function mergeSliceFilters(
     roles: [],
     tasks: [],
     types: [],
-    includeTimeOff: false,
   };
   const start = useDashboardFilters && base ? { ...base } : empty;
 
@@ -41,7 +40,6 @@ export function mergeSliceFilters(
     roles: override.roles ?? start.roles,
     tasks: override.tasks ?? start.tasks,
     types: override.types ?? start.types,
-    includeTimeOff: start.includeTimeOff,
   };
 }
 

@@ -9,47 +9,25 @@ const pctOf = (part: number, whole: number) =>
 
 export interface Summary {
   trackedHours: number;
-  timeOffHours: number;
   entries: number;
   people: number;
   billablePct: number;
   nonBillablePct: number;
 }
 
-export type AggregateOptions = {
-  /** When true, include time-off entries in work totals. Default false. */
-  includeTimeOff?: boolean;
-};
-
-function workRows(rows: EntryRow[], options?: AggregateOptions): EntryRow[] {
-  if (options?.includeTimeOff) return rows;
-  return rows.filter((row) => !row.is_time_off);
-}
-
-export function computeSummary(
-  rows: EntryRow[],
-  options?: AggregateOptions
-): Summary {
-  const work = workRows(rows, options);
+export function computeSummary(rows: EntryRow[]): Summary {
   let hours = 0;
   let billable = 0;
-  let timeOffHours = 0;
   const people = new Set<string>();
-  for (const row of work) {
+  for (const row of rows) {
     const h = n(row.hours);
     hours += h;
     if (row.is_billable) billable += h;
     people.add(row.person);
   }
-  if (!options?.includeTimeOff) {
-    for (const row of rows) {
-      if (row.is_time_off) timeOffHours += n(row.hours);
-    }
-  }
   return {
     trackedHours: r1(hours),
-    timeOffHours: r1(timeOffHours),
-    entries: work.length,
+    entries: rows.length,
     people: people.size,
     billablePct: pctOf(billable, hours),
     nonBillablePct: hours > 0 ? 100 - pctOf(billable, hours) : 0,
@@ -134,27 +112,6 @@ export function workingDayAvgLabel(filters: Filters): string {
   return "Team Avg / Working Day";
 }
 
-/**
- * Hours per scheduled working week: tracked hours ÷ (counted working days / 5).
- * Uses dated schedule counted days, not calendar weeks.
- */
-export function computeWorkingWeekAvg(
-  rows: EntryRow[],
-  daily: PersonDailyTracking[],
-  filters: Filters,
-  eligiblePeople: Iterable<string>
-): number {
-  const dayAvg = computeWorkingDayAvg(rows, daily, filters, eligiblePeople);
-  return dayAvg > 0 ? dayAvg * 5 : 0;
-}
-
-export function workingWeekAvgLabel(filters: Filters): string {
-  if (filters.people.length === 1) {
-    return `${filters.people[0]} Hours per Working Week`;
-  }
-  return "Hours per Working Week";
-}
-
 // --- Time series -----------------------------------------------------------
 
 export type Granularity = "day" | "week" | "month";
@@ -235,11 +192,10 @@ export function computeTimeSeries(
   rows: EntryRow[],
   g: Granularity,
   from?: string,
-  to?: string,
-  options?: AggregateOptions
+  to?: string
 ): TimePoint[] {
   const map = new Map<string, number>();
-  for (const row of workRows(rows, options)) {
+  for (const row of rows) {
     const k = bucketKey(row.date, g);
     map.set(k, (map.get(k) ?? 0) + n(row.hours));
   }
@@ -283,16 +239,14 @@ export type WeekDayCluster = {
 export function computeWeekDayClusters(
   rows: EntryRow[],
   from?: string,
-  to?: string,
-  options?: AggregateOptions
+  to?: string
 ): WeekDayCluster[] {
-  const scoped = workRows(rows, options);
   const weeks =
     from && to
       ? bucketRange(from, to, "week")
       : [
           ...new Set(
-            scoped.map((r) => bucketKey(r.date, "week")).filter(Boolean)
+            rows.map((r) => bucketKey(r.date, "week")).filter(Boolean)
           ),
         ].sort();
 
@@ -301,7 +255,7 @@ export function computeWeekDayClusters(
     byWeek.set(week, [0, 0, 0, 0, 0, 0, 0]);
   }
 
-  for (const row of scoped) {
+  for (const row of rows) {
     if (from && row.date < from) continue;
     if (to && row.date > to) continue;
     const week = bucketKey(row.date, "week");
@@ -466,16 +420,14 @@ function lastDayOfMonth(yearMonth: string): string {
 export function computeMonthWeekClusters(
   rows: EntryRow[],
   from?: string,
-  to?: string,
-  options?: AggregateOptions
+  to?: string
 ): MonthWeekCluster[] {
-  const scoped = workRows(rows, options);
   const months =
     from && to
       ? bucketRange(from, to, "month")
       : [
           ...new Set(
-            scoped.map((r) => bucketKey(r.date, "month")).filter(Boolean)
+            rows.map((r) => bucketKey(r.date, "month")).filter(Boolean)
           ),
         ].sort();
 
@@ -501,7 +453,7 @@ export function computeMonthWeekClusters(
     }
 
     const weekHours = weekMondays.map(() => 0);
-    for (const row of scoped) {
+    for (const row of rows) {
       if (row.date < rangeStart || row.date > rangeEnd) continue;
       if (bucketKey(row.date, "month") !== month) continue;
       const wk = bucketKey(row.date, "week");
@@ -574,14 +526,13 @@ type DimensionKey = "department" | "role" | "task" | "type";
 
 export function computeByDimension(
   rows: EntryRow[],
-  key: DimensionKey,
-  options?: AggregateOptions
+  key: DimensionKey
 ): DimensionRow[] {
   const map = new Map<
     string,
     { hours: number; entries: number; billable: number; people: Set<string> }
   >();
-  for (const row of workRows(rows, options)) {
+  for (const row of rows) {
     const value = row[key];
     if (!value) continue;
     const agg =
@@ -614,13 +565,10 @@ export interface BillableSplit {
   billablePct: number;
 }
 
-export function computeBillableSplit(
-  rows: EntryRow[],
-  options?: AggregateOptions
-): BillableSplit {
+export function computeBillableSplit(rows: EntryRow[]): BillableSplit {
   let billable = 0;
   let nonBillable = 0;
-  for (const row of workRows(rows, options)) {
+  for (const row of rows) {
     const h = n(row.hours);
     if (row.is_billable) billable += h;
     else nonBillable += h;
@@ -642,15 +590,12 @@ export interface PersonSummary {
   nonBillablePct: number;
 }
 
-export function computePersonSummaries(
-  rows: EntryRow[],
-  options?: AggregateOptions
-): PersonSummary[] {
+export function computePersonSummaries(rows: EntryRow[]): PersonSummary[] {
   const map = new Map<
     string,
     { hours: number; entries: number; billable: number }
   >();
-  for (const row of workRows(rows, options)) {
+  for (const row of rows) {
     const agg = map.get(row.person) ?? { hours: 0, entries: 0, billable: 0 };
     const h = n(row.hours);
     agg.hours += h;
@@ -685,11 +630,10 @@ export interface HierarchyNode {
  */
 export function computeHierarchy(
   rows: EntryRow[],
-  rootName = "All",
-  options?: AggregateOptions
+  rootName = "All"
 ): HierarchyNode {
   const depts = new Map<string, Map<string, Map<string, number>>>();
-  for (const row of workRows(rows, options)) {
+  for (const row of rows) {
     const dept = row.department?.trim() || "Unspecified";
     const role = row.role?.trim() || "Unspecified";
     const task = row.type?.trim() || "Unspecified";

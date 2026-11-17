@@ -30,7 +30,6 @@ function parseStoredFilters(raw: string): Filters | null {
       roles: parsed.roles,
       tasks: parsed.tasks,
       types: parsed.types,
-      includeTimeOff: parsed.includeTimeOff === true,
     };
   } catch {
     return null;
@@ -87,7 +86,6 @@ export function reconcileStoredFilters(
     roles: pick(stored.roles, options.roles),
     tasks: [],
     types: pick(stored.types, options.types),
-    includeTimeOff: stored.includeTimeOff === true,
   };
 }
 

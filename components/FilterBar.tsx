@@ -26,7 +26,6 @@ function activeFilterCount(filters: Filters, bounds: DateBounds, hidden: Set<Fil
   if (!hidden.has("department") && filters.departments.length) count += 1;
   if (!hidden.has("role") && filters.roles.length) count += 1;
   if (!hidden.has("type") && filters.types.length) count += 1;
-  if (filters.includeTimeOff) count += 1;
   return count;
 }
 
@@ -109,23 +108,6 @@ export function FilterBar({
             onChange={(value) => onChange({ types: value })}
           />
         )}
-        <label
-          className={`inline-flex items-center gap-2 text-ink touch-manipulation ${
-            fullWidth
-              ? "h-11 w-full justify-start rounded-md border border-line bg-surface px-3 text-base"
-              : "h-10 px-1 text-[13px] md:h-8"
-          }`}
-        >
-          <input
-            type="checkbox"
-            className="size-4 accent-[color:var(--color-brand)]"
-            checked={filters.includeTimeOff}
-            onChange={(event) =>
-              onChange({ includeTimeOff: event.target.checked })
-            }
-          />
-          <span className="whitespace-nowrap">Include time off</span>
-        </label>
         {extras?.(fullWidth)}
         {!isDefault(defaultCheck, bounds) || extraActive ? (
           <button
