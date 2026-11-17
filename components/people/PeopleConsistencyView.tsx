@@ -177,7 +177,6 @@ export function PeopleConsistencyView({
               <thead>
                 <tr>
                   <th>Person</th>
-                  <th className="text-center">Hours per Working Week</th>
                   <th className="text-center">Avg / Working Day</th>
                   <th className="text-center">Median Active Day</th>
                   <th className="text-center">Working Days</th>
@@ -207,9 +206,6 @@ export function PeopleConsistencyView({
                           />
                           <span className="hover:underline">{k.person}</span>
                         </button>
-                      </td>
-                      <td className="text-center tabular-nums">
-                        {hasDays ? hours(k.hoursPerWorkingWeek) : "—"}
                       </td>
                       <td className="text-center tabular-nums">
                         {hasDays ? hours(k.avgWorkingDay) : "—"}

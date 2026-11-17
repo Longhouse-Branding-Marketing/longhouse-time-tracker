@@ -18,8 +18,8 @@ import {
   computePersonOperations,
   computeSummary,
   computeTimeSeries,
-  computeWorkingWeekAvg,
-  workingWeekAvgLabel,
+  computeWorkingDayAvg,
+  workingDayAvgLabel,
 } from "@/lib/aggregate";
 import { sumTimeOffHours } from "@/lib/filtering";
 import { CHART_TITLES } from "@/lib/chartTitles";
@@ -143,11 +143,11 @@ export function HomeDashboard({
     () => kpiPeople.map((k) => k.person),
     [kpiPeople]
   );
-  const workingWeekAvg = useMemo(
-    () => computeWorkingWeekAvg(rows, dailyTracking, filters, eligiblePeople),
+  const workingDayAvg = useMemo(
+    () => computeWorkingDayAvg(rows, dailyTracking, filters, eligiblePeople),
     [rows, dailyTracking, filters, eligiblePeople]
   );
-  const weekAvgLabel = useMemo(() => workingWeekAvgLabel(filters), [filters]);
+  const avgLabel = useMemo(() => workingDayAvgLabel(filters), [filters]);
   const timeOffHours = useMemo(() => {
     if (filters.includeTimeOff) return 0;
     return sumTimeOffHours(activeEntries, filters);
@@ -362,10 +362,10 @@ export function HomeDashboard({
           <StatCard className="h-full" label="People Tracked" value={summary.people} />
           <StatCard
             className="h-full"
-            label={weekAvgLabel}
+            label={avgLabel}
             value={
-              workingWeekAvg > 0
-                ? `${n(workingWeekAvg).toLocaleString(undefined, {
+              workingDayAvg > 0
+                ? `${n(workingDayAvg).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })} Hours`

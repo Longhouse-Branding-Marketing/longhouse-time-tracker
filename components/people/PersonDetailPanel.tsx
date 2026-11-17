@@ -158,7 +158,6 @@ export function PersonDetailPanel({
       entries: visibleEntries.length,
       tracked: ops ? ops.trackedHours : totalHours,
       avg: ops ? ops.avgWorkingDay : 0,
-      weekAvg: ops ? ops.hoursPerWorkingWeek : 0,
       countedDays: ops ? ops.countedWorkingDays : 0,
       median: ops ? ops.medianActiveDay : 0,
       timeOff,
@@ -229,15 +228,8 @@ export function PersonDetailPanel({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
-            <Stat
-              label="Tracked Hours"
-              value={hours(stats.tracked)}
-            />
-            <Stat
-              label="Hours per Working Week"
-              value={stats.countedDays > 0 ? hours(stats.weekAvg) : "—"}
-            />
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Stat label="Tracked Hours" value={hours(stats.tracked)} />
             <Stat
               label="Avg / Working Day"
               value={stats.countedDays > 0 ? hours(stats.avg) : "—"}
