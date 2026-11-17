@@ -72,6 +72,7 @@ export function ImportView() {
   const coverage = useApiData<CompletedDayStatus>("/api/import/coverage");
   const [serviceRoleOk, setServiceRoleOk] = useState<boolean | null>(null);
   const [importDupOpen, setImportDupOpen] = useState(false);
+  const [editedReviewOpen, setEditedReviewOpen] = useState(false);
   const [repairPreview, setRepairPreview] =
     useState<RepairPreviewResult | null>(null);
   const [repairProgress, setRepairProgress] = useState<RepairProgress | null>(
@@ -499,6 +500,26 @@ export function ImportView() {
               </p>
             ) : null}
 
+            {preview.editedReexportCount > 0 ? (
+              <p className="mt-3 text-[12px] text-muted">
+                {preview.editedReexportCount.toLocaleString()} row
+                {preview.editedReexportCount === 1 ? "" : "s"} look like a
+                Memtime block edited between exports (same person, day, and
+                comment with overlapping times). They will still be imported —
+                review before confirming.{" "}
+                <button
+                  type="button"
+                  className="font-medium text-brand-600 hover:underline"
+                  disabled={pending || importBusy}
+                  onClick={() => setEditedReviewOpen(true)}
+                >
+                  Review {preview.editedReexportCount.toLocaleString()} Edited
+                  Re-export
+                  {preview.editedReexportCount === 1 ? "" : "s"}
+                </button>
+              </p>
+            ) : null}
+
             {preview.sample.length > 0 ? (
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[520px] text-left text-[12px]">
@@ -622,6 +643,20 @@ export function ImportView() {
           wouldInsert={preview.wouldInsert}
           pending={importBusy}
           onCancel={() => setImportDupOpen(false)}
+          onConfirm={runCommit}
+        />
+      ) : null}
+
+      {editedReviewOpen && preview?.ok ? (
+        <ImportDuplicatesModal
+          title={`Likely Edited Re-exports (${preview.editedReexportCount.toLocaleString()})`}
+          intro="These rows overlap an existing timed block for the same person, day, and comment but are not exact duplicates. They will still be imported — confirm they are intentional edits, not accidental re-exports."
+          duplicates={preview.editedReexports}
+          total={preview.editedReexportCount}
+          wouldInsert={preview.wouldInsert}
+          pending={importBusy}
+          confirmLabel={`Import ${preview.wouldInsert.toLocaleString()} New`}
+          onCancel={() => setEditedReviewOpen(false)}
           onConfirm={runCommit}
         />
       ) : null}

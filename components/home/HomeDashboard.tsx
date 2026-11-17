@@ -18,9 +18,10 @@ import {
   computePersonOperations,
   computeSummary,
   computeTimeSeries,
-  computeWorkingDayAvg,
-  workingDayAvgLabel,
+  computeWorkingWeekAvg,
+  workingWeekAvgLabel,
 } from "@/lib/aggregate";
+import { sumTimeOffHours } from "@/lib/filtering";
 import { CHART_TITLES } from "@/lib/chartTitles";
 import {
   summarizeFilters,
@@ -142,11 +143,15 @@ export function HomeDashboard({
     () => kpiPeople.map((k) => k.person),
     [kpiPeople]
   );
-  const workingDayAvg = useMemo(
-    () => computeWorkingDayAvg(rows, dailyTracking, filters, eligiblePeople),
+  const workingWeekAvg = useMemo(
+    () => computeWorkingWeekAvg(rows, dailyTracking, filters, eligiblePeople),
     [rows, dailyTracking, filters, eligiblePeople]
   );
-  const avgLabel = useMemo(() => workingDayAvgLabel(filters), [filters]);
+  const weekAvgLabel = useMemo(() => workingWeekAvgLabel(filters), [filters]);
+  const timeOffHours = useMemo(() => {
+    if (filters.includeTimeOff) return 0;
+    return sumTimeOffHours(activeEntries, filters);
+  }, [activeEntries, filters]);
   const opsSummary = useMemo(() => {
     // All-time, same counted-day rules as People. Daily rows already follow
     // the schedule in effect each day, so a new schedule does not rescore
@@ -162,6 +167,7 @@ export function HomeDashboard({
         roles: [],
         tasks: [],
         types: [],
+        includeTimeOff: false,
       },
       kpis
     );
@@ -347,14 +353,19 @@ export function HomeDashboard({
             className="h-full"
             label="Tracked Hours"
             value={hours(summary.trackedHours)}
+            sub={
+              timeOffHours > 0
+                ? `${hours(timeOffHours)} time off (excluded)`
+                : undefined
+            }
           />
           <StatCard className="h-full" label="People Tracked" value={summary.people} />
           <StatCard
             className="h-full"
-            label={avgLabel}
+            label={weekAvgLabel}
             value={
-              workingDayAvg > 0
-                ? `${n(workingDayAvg).toLocaleString(undefined, {
+              workingWeekAvg > 0
+                ? `${n(workingWeekAvg).toLocaleString(undefined, {
                     minimumFractionDigits: 1,
                     maximumFractionDigits: 1,
                   })} Hours`

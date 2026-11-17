@@ -75,5 +75,6 @@ export function summarizeFilters(f: Filters): string {
   if (f.roles.length) parts.push(`${f.roles.length} role(s)`);
   if (f.tasks.length) parts.push(`${f.tasks.length} task(s)`);
   if (f.types.length) parts.push(`${f.types.length} type(s)`);
+  if (f.includeTimeOff) parts.push("incl. time off");
   return parts.join(" · ") || "All data";
 }

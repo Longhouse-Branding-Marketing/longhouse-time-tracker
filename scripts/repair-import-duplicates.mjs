@@ -56,6 +56,17 @@ function softFingerprint(f) {
     normComment(f.comments),
   ].join("|");
 }
+function identityKey(f) {
+  const range = normText(f.timeRange);
+  if (!range) return null;
+  return [
+    normText(f.person),
+    f.date,
+    range,
+    String(Math.round(f.loggedMinutes)),
+    normComment(f.comments),
+  ].join("|");
+}
 function hasTime(v) {
   return Boolean(v && String(v).trim());
 }
@@ -114,7 +125,27 @@ function plan(rows) {
   }
   const deleteIds = [];
   const keepIds = [];
-  for (const group of bySoft.values()) {
+  const planned = new Set();
+
+  // Pass 1: timed rows that share an identity key (labels renamed between exports).
+  const byIdentity = new Map();
+  for (const row of rows) {
+    const key = identityKey(toFields(row));
+    if (!key) continue;
+    const list = byIdentity.get(key) || [];
+    list.push(row);
+    byIdentity.set(key, list);
+  }
+  for (const group of byIdentity.values()) {
+    if (group.length < 2) continue;
+    const ranked = [...group].sort(preferNewer);
+    keepIds.push(ranked[0].id);
+    for (const r of ranked.slice(1)) deleteIds.push(r.id);
+    for (const r of group) planned.add(r.id);
+  }
+
+  for (const all of bySoft.values()) {
+    const group = all.filter((r) => !planned.has(r.id));
     if (group.length < 2) continue;
     const timed = group.filter((r) => hasTime(r.source_time_range));
     const untimed = group.filter((r) => !hasTime(r.source_time_range));

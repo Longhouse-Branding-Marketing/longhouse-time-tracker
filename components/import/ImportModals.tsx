@@ -86,6 +86,9 @@ export function ImportDuplicatesModal({
   pending,
   onCancel,
   onConfirm,
+  title,
+  intro,
+  confirmLabel,
 }: {
   duplicates: ImportDuplicateRow[];
   total: number;
@@ -93,23 +96,30 @@ export function ImportDuplicatesModal({
   pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
+  intro?: ReactNode;
+  confirmLabel?: string;
 }) {
   const showing = duplicates.length;
   return (
     <EditModal
-      title={`Duplicates Found (${total.toLocaleString()})`}
+      title={title ?? `Duplicates Found (${total.toLocaleString()})`}
       size="xl"
       onClose={onCancel}
     >
       <div className="space-y-4 px-5 py-4">
         <p className="text-[13px] text-muted">
-          These rows are already in the system (or repeated in this file). They
-          will be skipped — nothing is deleted. Only{" "}
-          <span className="font-medium text-ink">
-            {wouldInsert.toLocaleString()} new row
-            {wouldInsert === 1 ? "" : "s"}
-          </span>{" "}
-          will be imported.
+          {intro ?? (
+            <>
+              These rows are already in the system (or repeated in this file). They
+              will be skipped — nothing is deleted. Only{" "}
+              <span className="font-medium text-ink">
+                {wouldInsert.toLocaleString()} new row
+                {wouldInsert === 1 ? "" : "s"}
+              </span>{" "}
+              will be imported.
+            </>
+          )}
         </p>
         {showing < total ? (
           <p className="text-[12px] text-muted">
@@ -140,7 +150,11 @@ export function ImportDuplicatesModal({
                 <td className="py-2 pr-3 text-ink">{row.task ?? "—"}</td>
                 <td className="py-2 pr-3 text-muted">{row.timeRange ?? "—"}</td>
                 <td className="py-2 pr-3 text-muted">
-                  {row.reason === "in_file" ? "In file" : "Already imported"}
+                  {row.reason === "in_file"
+                    ? "In file"
+                    : row.reason === "likely_edited_reexport"
+                      ? "Likely edited re-export"
+                      : "Already imported"}
                 </td>
                 <td className="py-2 font-mono text-[11px] text-muted">
                   {shortHash(row.entry_hash)}
@@ -168,7 +182,8 @@ export function ImportDuplicatesModal({
               ? "Importing…"
               : wouldInsert === 0
                 ? "Nothing To Import"
-                : `Import ${wouldInsert.toLocaleString()} New · Skip Duplicates`}
+                : (confirmLabel ??
+                  `Import ${wouldInsert.toLocaleString()} New · Skip Duplicates`)}
           </button>
         </div>
       </div>

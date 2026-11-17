@@ -7,7 +7,9 @@ import type { EntryRow } from "./types";
 export type FilterableEntry = Pick<
   EntryRow,
   "date" | "person" | "department" | "role" | "task" | "type"
->;
+> & {
+  is_time_off?: boolean;
+};
 
 export interface Filters {
   from: string;
@@ -17,6 +19,8 @@ export interface Filters {
   roles: string[];
   tasks: string[];
   types: string[];
+  /** When false (default), time-off entries are excluded from aggregates. */
+  includeTimeOff: boolean;
 }
 
 export interface FilterOptions {
@@ -69,6 +73,7 @@ export function defaultFilters(bounds: DateBounds): Filters {
     roles: [],
     tasks: [],
     types: [],
+    includeTimeOff: false,
   };
 }
 
@@ -84,6 +89,7 @@ export function applyFilters<T extends FilterableEntry>(
   return rows.filter((r) => {
     if (f.from && r.date < f.from) return false;
     if (f.to && r.date > f.to) return false;
+    if (!f.includeTimeOff && r.is_time_off) return false;
     if (people.size && !personMatchesSelection(r.person, people)) return false;
     if (depts.size && !(r.department && depts.has(r.department))) return false;
     if (roles.size && !(r.role && roles.has(r.role))) return false;
@@ -106,6 +112,23 @@ export function isDefault(f: Filters, bounds: DateBounds): boolean {
     f.departments.length === 0 &&
     f.roles.length === 0 &&
     f.tasks.length === 0 &&
-    f.types.length === 0
+    f.types.length === 0 &&
+    !f.includeTimeOff
   );
+}
+
+/** Sum hours on time-off entries in the current date/person/dimension scope. */
+export function sumTimeOffHours<T extends FilterableEntry & { hours?: number | string | null }>(
+  rows: T[],
+  f: Omit<Filters, "includeTimeOff"> & { includeTimeOff?: boolean }
+): number {
+  const scoped = applyFilters(rows, { ...f, includeTimeOff: true });
+  let total = 0;
+  for (const row of scoped) {
+    if (!row.is_time_off) continue;
+    const h =
+      typeof row.hours === "string" ? parseFloat(row.hours) : Number(row.hours ?? 0);
+    if (Number.isFinite(h)) total += h;
+  }
+  return Math.round(total * 10) / 10;
 }
