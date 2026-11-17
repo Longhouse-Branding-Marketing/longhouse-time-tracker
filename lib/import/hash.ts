@@ -70,6 +70,42 @@ export function softFingerprint(fields: Omit<HashFields, "timeRange">): string {
   ].join("|");
 }
 
+/**
+ * Identity key for a timed Memtime block: who, when, how long, and what they wrote.
+ * Deliberately excludes department / role / task / type / billable, because Memtime
+ * renames those. Returns null when there is no time range (legacy rows use softFingerprint).
+ */
+export function identityKey(
+  fields: Pick<HashFields, "person" | "date" | "loggedMinutes" | "comments" | "timeRange">
+): string | null {
+  const range = normText(fields.timeRange);
+  if (!range) return null;
+  return [
+    normText(fields.person),
+    fields.date,
+    range,
+    String(Math.round(fields.loggedMinutes)),
+    normComment(fields.comments),
+  ].join("|");
+}
+
+/** Parse "9:20 a.m. - 10:40 a.m." into minutes since midnight; null if unparseable. */
+export function parseTimeRange(value: string | null | undefined): [number, number] | null {
+  if (!value) return null;
+  const parts = String(value).toLowerCase().split(" - ");
+  if (parts.length !== 2) return null;
+  const toMin = (t: string): number | null => {
+    const m = t.trim().match(/^(\d{1,2}):(\d{2})\s*([ap])\.?m\.?$/);
+    if (!m) return null;
+    let h = Number(m[1]) % 12;
+    if (m[3] === "p") h += 12;
+    return h * 60 + Number(m[2]);
+  };
+  const a = toMin(parts[0]);
+  const b = toMin(parts[1]);
+  return a == null || b == null ? null : [a, b];
+}
+
 /** Preview-only slug — not stored (no employee_key column in Supabase). */
 export function employeeKey(name: string): string {
   return name

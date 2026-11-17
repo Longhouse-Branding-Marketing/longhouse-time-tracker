@@ -30,6 +30,8 @@ export interface EntryRow {
   raw_type?: string | null;
   raw_billable?: string | null;
   mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
+  /** True when mapped type is Employee Time Off or task starts with "Time off -". */
+  is_time_off?: boolean;
 }
 
 /** Full entry row for the person detail panel (includes comments + created_at). */
@@ -52,6 +54,7 @@ export interface PersonEntryDetail {
   raw_type?: string | null;
   raw_billable?: string | null;
   mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
+  is_time_off?: boolean;
 }
 
 export interface HomeSummary {
@@ -80,6 +83,8 @@ export interface PersonDailyTracking {
   person: string;
   date: string;
   tracked_hours: Num;
+  /** Hours logged as time off (excluded from tracked_hours). */
+  time_off_hours?: Num;
   daily_goal: Num;
   include_in_operations_kpi: boolean;
   scheduled_to_work: boolean;

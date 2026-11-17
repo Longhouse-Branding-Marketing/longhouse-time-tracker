@@ -147,16 +147,25 @@ export function PersonDetailPanel({
       totalHours += h;
       if (row.is_billable) billableHours += h;
     }
+    let timeOff = 0;
+    for (const row of state.status === "ready" ? state.data.entries : []) {
+      if (!row.is_time_off) continue;
+      if (scopedFilters.from && row.date < scopedFilters.from) continue;
+      if (scopedFilters.to && row.date > scopedFilters.to) continue;
+      timeOff += n(row.hours);
+    }
     return {
       entries: visibleEntries.length,
       tracked: ops ? ops.trackedHours : totalHours,
       avg: ops ? ops.avgWorkingDay : 0,
+      weekAvg: ops ? ops.hoursPerWorkingWeek : 0,
       countedDays: ops ? ops.countedWorkingDays : 0,
       median: ops ? ops.medianActiveDay : 0,
+      timeOff,
       billablePct: totalHours > 0 ? (100 * billableHours) / totalHours : 0,
       status: ops?.status ?? state.data.kpi?.status ?? null,
     };
-  }, [state, visibleEntries, ops]);
+  }, [state, visibleEntries, ops, scopedFilters]);
 
   return (
     <EditModal
@@ -220,8 +229,15 @@ export function PersonDetailPanel({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Stat label="Tracked Hours" value={hours(stats.tracked)} />
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+            <Stat
+              label="Tracked Hours"
+              value={hours(stats.tracked)}
+            />
+            <Stat
+              label="Hours per Working Week"
+              value={stats.countedDays > 0 ? hours(stats.weekAvg) : "—"}
+            />
             <Stat
               label="Avg / Working Day"
               value={stats.countedDays > 0 ? hours(stats.avg) : "—"}
@@ -237,6 +253,15 @@ export function PersonDetailPanel({
             <Stat label="Entries" value={stats.entries.toLocaleString()} />
             <Stat label="Billable" value={pct(stats.billablePct)} />
           </div>
+          {!filters.includeTimeOff && stats.timeOff > 0 ? (
+            <p className="mt-3 text-[12px] text-muted">
+              Time off:{" "}
+              <span className="font-medium tabular-nums text-ink">
+                {hours(stats.timeOff)}
+              </span>{" "}
+              excluded from tracked hours.
+            </p>
+          ) : null}
 
           <div className="mt-6">
             <h3 className="lh-section-title">Time Entries</h3>

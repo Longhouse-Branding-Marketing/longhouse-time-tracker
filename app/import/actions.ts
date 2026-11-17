@@ -13,9 +13,11 @@ import {
 import {
   existingEntryHashes,
   isDuplicateOfExisting,
+  isLikelyEditedReexport,
+  toHashFields,
   type ExistingEntryForDedup,
 } from "@/lib/import/dedup";
-import type { HashFields } from "@/lib/import/hash";
+import { identityKey, type HashFields } from "@/lib/import/hash";
 import { isEntryHashConflict, isIdentitySequenceConflict, isUniqueViolation } from "@/lib/import/pg-errors";
 import { bustMemoryCache } from "@/lib/memory-cache";
 import { getSupabaseServiceRole } from "@/lib/supabase";
@@ -145,12 +147,22 @@ function partitionAgainstExisting(
   const accepted = new Set<string>();
   const hashOnly = options?.hashOnly ?? false;
 
+  // Identity keys (person|date|time|minutes|comment) of existing timed rows, so a
+  // re-export with renamed department/role/task/type is skipped, not re-inserted.
+  const knownIdentities = new Set<string>();
+  for (const ex of existing) {
+    const key = identityKey(toHashFields(ex));
+    if (key) knownIdentities.add(key);
+  }
+
   for (const row of unique) {
     const canonical = canonicalizeInsert(row);
+    const identity = identityKey(insertToHashFields(canonical));
 
     if (
       knownHashes.has(canonical.entry_hash) ||
-      accepted.has(canonical.entry_hash)
+      accepted.has(canonical.entry_hash) ||
+      (identity != null && knownIdentities.has(identity))
     ) {
       skippedRows.push(canonical);
       continue;
@@ -167,6 +179,7 @@ function partitionAgainstExisting(
 
     accepted.add(canonical.entry_hash);
     knownHashes.add(canonical.entry_hash);
+    if (identity != null) knownIdentities.add(identity);
     newRows.push(canonical);
   }
   return { newRows, skippedRows };
@@ -182,6 +195,7 @@ async function resolveImportNewRows(
   newRows: TimeEntryInsert[];
   intraDuplicates: TimeEntryInsert[];
   skippedRows: TimeEntryInsert[];
+  existing: ExistingEntryForDedup[];
 }> {
   const employees = await getEmployees();
   const parsed = parseMemtimeCsv(csvText, {
@@ -204,7 +218,7 @@ async function resolveImportNewRows(
     existing,
     knownHashes
   );
-  return { parsed, unique, newRows, intraDuplicates, skippedRows };
+  return { parsed, unique, newRows, intraDuplicates, skippedRows, existing };
 }
 
 /**
@@ -327,6 +341,7 @@ export async function previewImport(
     rejectedCount: 0,
     wouldInsert: 0,
     wouldSkipDuplicate: 0,
+    editedReexportCount: 0,
     dateMin: null,
     dateMax: null,
     totalHours: 0,
@@ -335,6 +350,7 @@ export async function previewImport(
     rows: [],
     duplicates: [],
     duplicatesTotal: 0,
+    editedReexports: [],
     dbTimeEntryCount: 0,
     dbProjectRef: supabaseProjectRef(),
     sample: [],
@@ -373,7 +389,7 @@ export async function previewImport(
     const dbTimeEntryCount = await countTimeEntries();
     const dbProjectRef = supabaseProjectRef();
 
-    const { parsed, unique, newRows, intraDuplicates, skippedRows } =
+    const { parsed, unique, newRows, intraDuplicates, skippedRows, existing } =
       await resolveImportNewRows(csvText, sourceFile);
     const wouldSkipDuplicate = intraDuplicates.length + skippedRows.length;
 
@@ -383,6 +399,21 @@ export async function previewImport(
     ];
     const duplicatesTotal = allDuplicates.length;
     const duplicates = allDuplicates.slice(0, DUPLICATE_LIST_LIMIT);
+
+    // Overlapping timed blocks from a different file — keep as new, list for review.
+    const editedReexports: ImportDuplicateRow[] = [];
+    for (const row of newRows) {
+      const fields = {
+        ...insertToHashFields(row),
+        sourceFile: sourceFile ?? row.source_file ?? null,
+      };
+      if (existing.some((ex) => isLikelyEditedReexport(fields, ex))) {
+        editedReexports.push(
+          toImportDuplicateRow(row, "likely_edited_reexport")
+        );
+      }
+    }
+    const editedReexportCount = editedReexports.length;
 
     let newHours = 0;
     const sample: ImportPreviewResult["sample"] = [];
@@ -411,6 +442,7 @@ export async function previewImport(
       rejectedCount: parsed.rejected.length,
       wouldInsert: newRows.length,
       wouldSkipDuplicate,
+      editedReexportCount,
       dateMin: parsed.dateMin,
       dateMax: parsed.dateMax,
       totalHours: parsed.totalHours,
@@ -419,6 +451,7 @@ export async function previewImport(
       rows: newRows,
       duplicates,
       duplicatesTotal,
+      editedReexports: editedReexports.slice(0, DUPLICATE_LIST_LIMIT),
       dbTimeEntryCount,
       dbProjectRef,
       sample,

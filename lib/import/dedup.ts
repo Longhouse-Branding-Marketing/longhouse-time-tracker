@@ -1,5 +1,8 @@
 import {
   entryHash,
+  identityKey,
+  normComment,
+  parseTimeRange,
   softFingerprint,
   type HashFields,
 } from "./hash";
@@ -81,6 +84,12 @@ export function isDuplicateOfExisting(
     return true;
   }
 
+  // Re-export of the same timed block with renamed department/role/task/type.
+  const inId = identityKey(incoming);
+  if (inId && inId === identityKey(existingFields)) {
+    return true;
+  }
+
   if (softFingerprint(incoming) !== softFingerprint(existingFields)) {
     return false;
   }
@@ -92,6 +101,25 @@ export function isDuplicateOfExisting(
     String(incoming.timeRange).trim().toLowerCase() ===
     String(existing.source_time_range).trim().toLowerCase()
   );
+}
+
+/**
+ * Same person and day, same comment, overlapping times, from a different file:
+ * almost always a block edited in Memtime between two exports. Not auto-skipped;
+ * the import preview should list these for review.
+ */
+export function isLikelyEditedReexport(
+  incoming: HashFields & { sourceFile?: string | null },
+  existing: ExistingEntryForDedup
+): boolean {
+  if (incoming.person.trim().toLowerCase() !== existing.person.trim().toLowerCase()) return false;
+  if (incoming.date !== String(existing.date).slice(0, 10)) return false;
+  if (incoming.sourceFile && existing.source_file && incoming.sourceFile === existing.source_file) return false;
+  if (normComment(incoming.comments) !== normComment(existing.comments)) return false;
+  const a = parseTimeRange(incoming.timeRange);
+  const b = parseTimeRange(existing.source_time_range);
+  if (!a || !b) return false;
+  return a[0] < b[1] && b[0] < a[1];
 }
 
 export type SoftDupGroup = {
@@ -116,8 +144,27 @@ export function planSoftDuplicateCleanup(
   }
 
   const plans: SoftDupGroup[] = [];
+  const planned = new Set<number>();
 
-  for (const group of bySoft.values()) {
+  // Pass 1: timed rows that share an identity key (labels renamed between exports).
+  const byIdentity = new Map<string, ExistingEntryForDedup[]>();
+  for (const row of rows) {
+    const key = identityKey(toHashFields(row));
+    if (!key) continue;
+    const list = byIdentity.get(key) ?? [];
+    list.push(row);
+    byIdentity.set(key, list);
+  }
+  for (const group of byIdentity.values()) {
+    if (group.length < 2) continue;
+    const ranked = [...group].sort(preferNewer);
+    const deleteIds = ranked.slice(1).map((r) => r.id);
+    plans.push({ keepId: ranked[0].id, deleteIds });
+    for (const r of group) planned.add(r.id);
+  }
+
+  for (const all of bySoft.values()) {
+    const group = all.filter((r) => !planned.has(r.id));
     if (group.length < 2) continue;
 
     const timed = group.filter((r) => hasTime(r.source_time_range));

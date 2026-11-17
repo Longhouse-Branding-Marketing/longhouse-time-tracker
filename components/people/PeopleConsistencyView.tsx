@@ -23,6 +23,7 @@ import {
   defaultFilters,
   extractOptions,
   isDefault,
+  sumTimeOffHours,
   withoutDepartments,
   type Filters,
 } from "@/lib/filtering";
@@ -98,6 +99,11 @@ export function PeopleConsistencyView({
     [rows, dailyTracking, peopleFilters, kpis]
   );
 
+  const timeOffHours = useMemo(() => {
+    if (peopleFilters.includeTimeOff) return 0;
+    return sumTimeOffHours(activeEntries, peopleFilters);
+  }, [activeEntries, peopleFilters]);
+
   const scheduleNeeded = opsRows.filter(
     (k) => k.status === "Schedule needed"
   ).length;
@@ -152,6 +158,16 @@ export function PeopleConsistencyView({
         </div>
       ) : null}
 
+      {timeOffHours > 0 ? (
+        <p className="mt-4 text-[13px] text-muted">
+          Time off:{" "}
+          <span className="font-medium tabular-nums text-ink">
+            {hours(timeOffHours)}
+          </span>{" "}
+          excluded from tracked hours (turn on Include time off to count it).
+        </p>
+      ) : null}
+
       <Panel title="Tracking Consistency" className="mt-6" noBodyPadding>
         {opsRows.length === 0 ? (
           <EmptyRow>No people match the current filters.</EmptyRow>
@@ -161,6 +177,7 @@ export function PeopleConsistencyView({
               <thead>
                 <tr>
                   <th>Person</th>
+                  <th className="text-center">Hours per Working Week</th>
                   <th className="text-center">Avg / Working Day</th>
                   <th className="text-center">Median Active Day</th>
                   <th className="text-center">Working Days</th>
@@ -190,6 +207,9 @@ export function PeopleConsistencyView({
                           />
                           <span className="hover:underline">{k.person}</span>
                         </button>
+                      </td>
+                      <td className="text-center tabular-nums">
+                        {hasDays ? hours(k.hoursPerWorkingWeek) : "—"}
                       </td>
                       <td className="text-center tabular-nums">
                         {hasDays ? hours(k.avgWorkingDay) : "—"}

@@ -9,8 +9,12 @@ export type ImportDuplicateRow = {
   role: string | null;
   timeRange: string | null;
   entry_hash: string;
-  /** Why this CSV row will be skipped. */
-  reason: "in_file" | "already_imported";
+  /**
+   * Why this CSV row appears in review:
+   * - in_file / already_imported → will be skipped
+   * - likely_edited_reexport → overlapping timed block from another file; still imported
+   */
+  reason: "in_file" | "already_imported" | "likely_edited_reexport";
 };
 
 export type ImportPreviewResult = {
@@ -21,6 +25,8 @@ export type ImportPreviewResult = {
   rejectedCount: number;
   wouldInsert: number;
   wouldSkipDuplicate: number;
+  /** Rows that look like edited re-exports — listed for review, not auto-skipped. */
+  editedReexportCount: number;
   dateMin: string | null;
   dateMax: string | null;
   totalHours: number;
@@ -30,6 +36,8 @@ export type ImportPreviewResult = {
   /** Reviewable duplicate CSV rows (may be capped; see duplicatesTotal). */
   duplicates: ImportDuplicateRow[];
   duplicatesTotal: number;
+  /** Edited re-export candidates (capped with duplicates list). */
+  editedReexports: ImportDuplicateRow[];
   /** Rows in public.time_entries on the server Supabase project (service role). */
   dbTimeEntryCount: number;
   /** Project ref from SUPABASE_URL (e.g. rtwnjmhfcmttterxagge). */

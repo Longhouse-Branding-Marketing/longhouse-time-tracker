@@ -256,6 +256,7 @@ export function ReviewView({
     activeFilters.departments.join("\0"),
     activeFilters.roles.join("\0"),
     activeFilters.types.join("\0"),
+    activeFilters.includeTimeOff ? "1" : "0",
     billableFilter.join("\0"),
   ].join("|");
   const [pageState, setPageState] = useState({ key: listKey, page: 0 });

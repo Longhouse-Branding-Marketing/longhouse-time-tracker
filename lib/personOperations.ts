@@ -27,6 +27,8 @@ export interface PersonOperationsRow {
   trackedHours: number;
   countedWorkingDays: number;
   avgWorkingDay: number;
+  /** trackedHours ÷ (countedWorkingDays / 5) — scheduled weeks, not calendar. */
+  hoursPerWorkingWeek: number;
   medianActiveDay: number;
   status: string;
   context: string | null;
@@ -125,6 +127,7 @@ export function computePersonOperations(
       trackedHours: hoursByPerson.get(person) ?? 0,
       countedWorkingDays: days,
       avgWorkingDay: avg,
+      hoursPerWorkingWeek: days > 0 ? hoursSum / (days / 5) : 0,
       medianActiveDay: median(activeDayHours.get(person) ?? []),
       status,
       context: kpi.context,
