@@ -7,6 +7,7 @@ import {
   entryMatchesMapping,
   isNewStructureEntry,
   isPartnerBillableReview,
+  isTimeOffEntry,
   lookupTaskMap,
   mappingList,
   mergeReviewTasks,
@@ -423,5 +424,55 @@ describe("mergeReviewTasks", () => {
     assert.equal(merged.length, 2);
     assert.equal(merged[1]?.oldDepartment, "Administrative");
     assert.equal(mergeReviewTasks(local, local).length, 2);
+  });
+
+  it("flags Employee Time Off and Time off -* tasks, not Time Off Review", () => {
+    assert.equal(
+      isTimeOffEntry({ type: "Employee Time Off", task: "Anything" }),
+      true
+    );
+    assert.equal(
+      isTimeOffEntry({ type: null, task: "Time off - Vacation" }),
+      true
+    );
+    assert.equal(
+      isTimeOffEntry({ type: "Administrative", task: "Time Off Review" }),
+      false
+    );
+
+    const vacation = applyCategoryMap({
+      id: 90,
+      person: "Mary",
+      date: "2026-07-01",
+      department: "Operations",
+      role: "Team",
+      task: "Time off - Vacation",
+      type: null,
+      billable: "Non-Billable",
+      hours: 8,
+      comments: null,
+      is_billable: false,
+      year_month: "2026-07",
+      source_time_range: null,
+    });
+    assert.equal(vacation.is_time_off, true);
+    assert.equal(vacation.type, "Employee Time Off");
+
+    const review = applyCategoryMap({
+      id: 91,
+      person: "Mary",
+      date: "2026-07-02",
+      department: "Operations",
+      role: "Specialist",
+      task: "Time Off Review",
+      type: "Administrative",
+      billable: "Non-Billable",
+      hours: 0.2,
+      comments: null,
+      is_billable: false,
+      year_month: "2026-07",
+      source_time_range: null,
+    });
+    assert.equal(review.is_time_off, false);
   });
 });

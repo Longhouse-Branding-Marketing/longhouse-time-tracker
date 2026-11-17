@@ -30,6 +30,11 @@ export interface EntryRow {
   raw_type?: string | null;
   raw_billable?: string | null;
   mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
+  /**
+   * True for Employee Time Off / "Time off -*" blocks. Still shown in entry
+   * lists; excluded from dashboard totals and charts.
+   */
+  is_time_off?: boolean;
 }
 
 /** Full entry row for the person detail panel (includes comments + created_at). */
@@ -52,6 +57,7 @@ export interface PersonEntryDetail {
   raw_type?: string | null;
   raw_billable?: string | null;
   mapping_status?: "mapped" | "new_structure" | "unmapped" | "override";
+  is_time_off?: boolean;
 }
 
 export interface HomeSummary {

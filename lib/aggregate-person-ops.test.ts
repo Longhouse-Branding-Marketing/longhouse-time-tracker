@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { computeSummary } from "./aggregate.ts";
 import { computePersonOperations } from "./personOperations.ts";
 import { applyFilters, withoutDepartments } from "./filtering.ts";
 import type { EntryRow, OperationsKpi, PersonDailyTracking } from "./types.ts";
@@ -24,6 +25,7 @@ function entry(
     is_billable: extra.is_billable ?? false,
     year_month: date.slice(0, 7),
     source_time_range: null,
+    is_time_off: extra.is_time_off,
   };
 }
 
@@ -176,5 +178,41 @@ describe("computePersonOperations", () => {
     assert.equal(row.avgWorkingDay, 6.5);
     assert.equal(row.countedWorkingDays, 2);
     assert.equal(row.status, "Needs review");
+  });
+
+  it("excludes time-off entry hours from person tracked totals", () => {
+    const rows = [
+      entry("Hailey", "2026-09-01", 8),
+      entry("Hailey", "2026-09-02", 8, {
+        task: "Time off - Vacation",
+        type: "Employee Time Off",
+        is_time_off: true,
+      }),
+    ];
+    const daily = [
+      day("Hailey", "2026-09-01", 8, true),
+      day("Hailey", "2026-09-02", 0, true),
+    ];
+    const [row] = computePersonOperations(rows, daily, filters, [
+      kpi("Hailey"),
+    ]);
+    assert.equal(row.trackedHours, 8);
+    assert.equal(row.avgWorkingDay, 4);
+  });
+});
+
+describe("computeSummary time-off exclusion", () => {
+  it("drops time-off hours from dashboard summary totals", () => {
+    const rows = [
+      entry("Hailey", "2026-09-01", 7),
+      entry("Hailey", "2026-09-02", 8, {
+        task: "Time off - Sick",
+        type: "Employee Time Off",
+        is_time_off: true,
+      }),
+    ];
+    const summary = computeSummary(rows);
+    assert.equal(summary.trackedHours, 7);
+    assert.equal(summary.entries, 1);
   });
 });

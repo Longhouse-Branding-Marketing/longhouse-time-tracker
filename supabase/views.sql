@@ -32,7 +32,19 @@ employee_days AS (
 daily_actuals AS (
   SELECT time_entries.person,
          time_entries.date,
-         round(sum(time_entries.hours), 2) AS tracked_hours
+         -- Exclude Memtime time-off blocks and Employee Time Off from totals.
+         -- 'Time Off Review' does not match the task prefix and stays included.
+         round(
+           sum(
+             CASE
+               WHEN time_entries.task ILIKE 'Time off -%'
+                 OR time_entries.type = 'Employee Time Off'
+               THEN 0::numeric
+               ELSE time_entries.hours
+             END
+           ),
+           2
+         ) AS tracked_hours
   FROM time_entries
   GROUP BY time_entries.person, time_entries.date
 ),
@@ -197,5 +209,5 @@ JOIN eligible e ON e.person = t.person
 LEFT JOIN median_source m ON m.person = t.person
 ORDER BY t.avg_working_day DESC NULLS LAST;
 
-GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated;
-GRANT SELECT ON public.v_operations_kpi TO anon, authenticated;
+GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated, service_role;
+GRANT SELECT ON public.v_operations_kpi TO anon, authenticated, service_role;

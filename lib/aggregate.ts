@@ -15,11 +15,17 @@ export interface Summary {
   nonBillablePct: number;
 }
 
+/** Work rows only — time-off entries stay in lists but not in dashboard totals. */
+export function withoutTimeOffEntries(rows: EntryRow[]): EntryRow[] {
+  return rows.filter((row) => !row.is_time_off);
+}
+
 export function computeSummary(rows: EntryRow[]): Summary {
+  const work = withoutTimeOffEntries(rows);
   let hours = 0;
   let billable = 0;
   const people = new Set<string>();
-  for (const row of rows) {
+  for (const row of work) {
     const h = n(row.hours);
     hours += h;
     if (row.is_billable) billable += h;
@@ -27,7 +33,7 @@ export function computeSummary(rows: EntryRow[]): Summary {
   }
   return {
     trackedHours: r1(hours),
-    entries: rows.length,
+    entries: work.length,
     people: people.size,
     billablePct: pctOf(billable, hours),
     nonBillablePct: hours > 0 ? 100 - pctOf(billable, hours) : 0,
@@ -70,7 +76,7 @@ export function computeWorkingDayAvg(
   let hoursByPersonDate: Map<string, number> | null = null;
   if (hasDimFilters) {
     hoursByPersonDate = new Map();
-    for (const row of rows) {
+    for (const row of withoutTimeOffEntries(rows)) {
       if (!people.has(row.person)) continue;
       const key = `${row.person}\0${row.date}`;
       hoursByPersonDate.set(key, (hoursByPersonDate.get(key) ?? 0) + n(row.hours));
@@ -195,7 +201,7 @@ export function computeTimeSeries(
   to?: string
 ): TimePoint[] {
   const map = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     const k = bucketKey(row.date, g);
     map.set(k, (map.get(k) ?? 0) + n(row.hours));
   }
@@ -241,12 +247,13 @@ export function computeWeekDayClusters(
   from?: string,
   to?: string
 ): WeekDayCluster[] {
+  const work = withoutTimeOffEntries(rows);
   const weeks =
     from && to
       ? bucketRange(from, to, "week")
       : [
           ...new Set(
-            rows.map((r) => bucketKey(r.date, "week")).filter(Boolean)
+            work.map((r) => bucketKey(r.date, "week")).filter(Boolean)
           ),
         ].sort();
 
@@ -255,7 +262,7 @@ export function computeWeekDayClusters(
     byWeek.set(week, [0, 0, 0, 0, 0, 0, 0]);
   }
 
-  for (const row of rows) {
+  for (const row of work) {
     if (from && row.date < from) continue;
     if (to && row.date > to) continue;
     const week = bucketKey(row.date, "week");
@@ -358,7 +365,7 @@ export function computeHourlyBreakdown(
   let timedHours = 0;
   let untimedHours = 0;
 
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     if (row.date !== day) continue;
     const h = n(row.hours);
     const allocated = allocateRangeToHours(row.source_time_range, h);
@@ -453,7 +460,7 @@ export function computeMonthWeekClusters(
     }
 
     const weekHours = weekMondays.map(() => 0);
-    for (const row of rows) {
+    for (const row of withoutTimeOffEntries(rows)) {
       if (row.date < rangeStart || row.date > rangeEnd) continue;
       if (bucketKey(row.date, "month") !== month) continue;
       const wk = bucketKey(row.date, "week");
@@ -494,7 +501,7 @@ export function computePeopleForHour(
   const map = new Map<string, number>();
   const h = ((Math.floor(hour) % 24) + 24) % 24;
 
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     if (row.date !== day) continue;
     const total = n(row.hours);
     const allocated = allocateRangeToHours(row.source_time_range, total);
@@ -532,7 +539,7 @@ export function computeByDimension(
     string,
     { hours: number; entries: number; billable: number; people: Set<string> }
   >();
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     const value = row[key];
     if (!value) continue;
     const agg =
@@ -568,7 +575,7 @@ export interface BillableSplit {
 export function computeBillableSplit(rows: EntryRow[]): BillableSplit {
   let billable = 0;
   let nonBillable = 0;
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     const h = n(row.hours);
     if (row.is_billable) billable += h;
     else nonBillable += h;
@@ -595,7 +602,7 @@ export function computePersonSummaries(rows: EntryRow[]): PersonSummary[] {
     string,
     { hours: number; entries: number; billable: number }
   >();
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     const agg = map.get(row.person) ?? { hours: 0, entries: 0, billable: 0 };
     const h = n(row.hours);
     agg.hours += h;
@@ -633,7 +640,7 @@ export function computeHierarchy(
   rootName = "All"
 ): HierarchyNode {
   const depts = new Map<string, Map<string, Map<string, number>>>();
-  for (const row of rows) {
+  for (const row of withoutTimeOffEntries(rows)) {
     const dept = row.department?.trim() || "Unspecified";
     const role = row.role?.trim() || "Unspecified";
     const task = row.type?.trim() || "Unspecified";

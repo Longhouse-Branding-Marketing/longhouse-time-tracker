@@ -41,7 +41,12 @@ export interface PersonOperationsRow {
  * of the counted days in the filter (the goals that applied then).
  */
 export function computePersonOperations(
-  rows: Array<{ person: string; date: string; hours: number | string | null }>,
+  rows: Array<{
+    person: string;
+    date: string;
+    hours: number | string | null;
+    is_time_off?: boolean;
+  }>,
   daily: PersonDailyTracking[],
   filters: Filters,
   kpis: OperationsKpi[]
@@ -53,13 +58,14 @@ export function computePersonOperations(
     filters.types.length > 0;
 
   const kpiByPerson = new Map(kpis.map((k) => [k.person, k]));
+  const workRows = rows.filter((r) => !r.is_time_off);
 
   let people: Set<string>;
   if (filters.people.length > 0) {
     people = new Set(filters.people.filter((p) => kpiByPerson.has(p)));
   } else if (hasDimFilters) {
     people = new Set(
-      rows.map((r) => r.person).filter((p) => kpiByPerson.has(p))
+      workRows.map((r) => r.person).filter((p) => kpiByPerson.has(p))
     );
   } else {
     people = new Set(kpiByPerson.keys());
@@ -67,7 +73,7 @@ export function computePersonOperations(
 
   const hoursByPerson = new Map<string, number>();
   const hoursByPersonDate = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of workRows) {
     if (!people.has(row.person)) continue;
     const h = n(row.hours);
     hoursByPerson.set(row.person, (hoursByPerson.get(row.person) ?? 0) + h);
