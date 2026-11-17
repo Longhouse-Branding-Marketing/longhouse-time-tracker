@@ -229,5 +229,8 @@ JOIN eligible e ON e.person = t.person
 LEFT JOIN median_source m ON m.person = t.person
 ORDER BY t.avg_working_day DESC NULLS LAST;
 
-GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated;
-GRANT SELECT ON public.v_operations_kpi TO anon, authenticated;
+-- Include service_role: the app server queries these views with the service
+-- role key. CREATE OR REPLACE VIEW can drop prior grants depending on Postgres
+-- version / ownership; GRANT here keeps them available after re-run.
+GRANT SELECT ON public.v_person_daily_tracking TO anon, authenticated, service_role;
+GRANT SELECT ON public.v_operations_kpi TO anon, authenticated, service_role;
