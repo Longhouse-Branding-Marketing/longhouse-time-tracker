@@ -84,7 +84,6 @@ const emptyFilters = {
   roles: [] as string[],
   tasks: [] as string[],
   types: [] as string[],
-  includeTimeOff: false,
 };
 
 describe("schedule periods", () => {

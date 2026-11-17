@@ -23,7 +23,6 @@ import {
   defaultFilters,
   extractOptions,
   isDefault,
-  sumTimeOffHours,
   withoutDepartments,
   type Filters,
 } from "@/lib/filtering";
@@ -99,11 +98,6 @@ export function PeopleConsistencyView({
     [rows, dailyTracking, peopleFilters, kpis]
   );
 
-  const timeOffHours = useMemo(() => {
-    if (peopleFilters.includeTimeOff) return 0;
-    return sumTimeOffHours(activeEntries, peopleFilters);
-  }, [activeEntries, peopleFilters]);
-
   const scheduleNeeded = opsRows.filter(
     (k) => k.status === "Schedule needed"
   ).length;
@@ -156,16 +150,6 @@ export function PeopleConsistencyView({
             measured.
           </span>
         </div>
-      ) : null}
-
-      {timeOffHours > 0 ? (
-        <p className="mt-4 text-[13px] text-muted">
-          Time off:{" "}
-          <span className="font-medium tabular-nums text-ink">
-            {hours(timeOffHours)}
-          </span>{" "}
-          excluded from tracked hours (turn on Include time off to count it).
-        </p>
       ) : null}
 
       <Panel title="Tracking Consistency" className="mt-6" noBodyPadding>

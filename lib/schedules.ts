@@ -460,7 +460,6 @@ export function previewCountedDays(input: {
       person: input.person,
       date,
       tracked_hours: tracked,
-      time_off_hours: 0,
       daily_goal: schedule?.daily_goal ?? 0,
       include_in_operations_kpi: schedule?.include_in_operations_kpi ?? false,
       scheduled_to_work: scheduled,

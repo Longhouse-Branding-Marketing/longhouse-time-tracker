@@ -147,24 +147,16 @@ export function PersonDetailPanel({
       totalHours += h;
       if (row.is_billable) billableHours += h;
     }
-    let timeOff = 0;
-    for (const row of state.status === "ready" ? state.data.entries : []) {
-      if (!row.is_time_off) continue;
-      if (scopedFilters.from && row.date < scopedFilters.from) continue;
-      if (scopedFilters.to && row.date > scopedFilters.to) continue;
-      timeOff += n(row.hours);
-    }
     return {
       entries: visibleEntries.length,
       tracked: ops ? ops.trackedHours : totalHours,
       avg: ops ? ops.avgWorkingDay : 0,
       countedDays: ops ? ops.countedWorkingDays : 0,
       median: ops ? ops.medianActiveDay : 0,
-      timeOff,
       billablePct: totalHours > 0 ? (100 * billableHours) / totalHours : 0,
       status: ops?.status ?? state.data.kpi?.status ?? null,
     };
-  }, [state, visibleEntries, ops, scopedFilters]);
+  }, [state, visibleEntries, ops]);
 
   return (
     <EditModal
@@ -245,15 +237,6 @@ export function PersonDetailPanel({
             <Stat label="Entries" value={stats.entries.toLocaleString()} />
             <Stat label="Billable" value={pct(stats.billablePct)} />
           </div>
-          {!filters.includeTimeOff && stats.timeOff > 0 ? (
-            <p className="mt-3 text-[12px] text-muted">
-              Time off:{" "}
-              <span className="font-medium tabular-nums text-ink">
-                {hours(stats.timeOff)}
-              </span>{" "}
-              excluded from tracked hours.
-            </p>
-          ) : null}
 
           <div className="mt-6">
             <h3 className="lh-section-title">Time Entries</h3>
