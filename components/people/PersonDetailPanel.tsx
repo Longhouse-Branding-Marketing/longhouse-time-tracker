@@ -143,6 +143,7 @@ export function PersonDetailPanel({
     let billableHours = 0;
     let totalHours = 0;
     for (const row of visibleEntries) {
+      if (row.is_time_off) continue;
       const h = n(row.hours);
       totalHours += h;
       if (row.is_billable) billableHours += h;

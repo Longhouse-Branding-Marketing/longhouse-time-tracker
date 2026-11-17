@@ -20,7 +20,7 @@ interface Slice {
 function aggregateTypes(rows: EntryRow[]): Slice[] {
   const map = new Map<string, number>();
   for (const row of rows) {
-    if (!row.type) continue;
+    if (row.is_time_off || !row.type) continue;
     map.set(row.type, (map.get(row.type) ?? 0) + n(row.hours));
   }
   return [...map.entries()]
@@ -35,7 +35,7 @@ function aggregateTypes(rows: EntryRow[]): Slice[] {
 function aggregateTasks(rows: EntryRow[], type: string): Slice[] {
   const map = new Map<string, number>();
   for (const row of rows) {
-    if (row.type !== type || !row.task) continue;
+    if (row.is_time_off || row.type !== type || !row.task) continue;
     map.set(row.task, (map.get(row.task) ?? 0) + n(row.hours));
   }
   return [...map.entries()]

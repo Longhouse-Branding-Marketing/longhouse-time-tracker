@@ -94,7 +94,24 @@ export type MappedFields = {
   raw_type: string | null;
   raw_billable: string | null;
   mapping_status: MappingStatus;
+  /** Flagged for dashboard exclusion; still shown in entry lists. */
+  is_time_off: boolean;
 };
+
+/** Memtime time-off blocks use this task prefix; "Time Off Review" must not match. */
+export const TIME_OFF_TASK_PREFIX = "Time off -";
+export const EMPLOYEE_TIME_OFF_TYPE = "Employee Time Off";
+
+/** True when mapped/logged type is Employee Time Off or task starts with "Time off -". */
+export function isTimeOffEntry(row: {
+  task?: string | null;
+  type?: string | null;
+  raw_task?: string | null;
+}): boolean {
+  if (text(row.type) === EMPLOYEE_TIME_OFF_TYPE) return true;
+  const task = text(row.task) || text(row.raw_task);
+  return task.toLowerCase().startsWith(TIME_OFF_TASK_PREFIX.toLowerCase());
+}
 
 export type ApplyCategoryOptions = {
   index?: CategoryIndex;
@@ -223,7 +240,8 @@ export function applyCategoryMap<T extends CategorySource>(
     task: rawTask,
   };
 
-  let mapped: T & MappedFields;
+  type MappedWithoutFlag = Omit<MappedFields, "is_time_off">;
+  let mapped: T & MappedWithoutFlag;
   if (isNewStructureEntry(rawDepartment, rawType, index)) {
     mapped = {
       ...base,
@@ -261,7 +279,11 @@ export function applyCategoryMap<T extends CategorySource>(
     };
   }
 
-  return applyBillable(mapped, override);
+  const withBillable = applyBillable(mapped, override);
+  return {
+    ...withBillable,
+    is_time_off: isTimeOffEntry(withBillable),
+  };
 }
 
 export function applyCategoryMapToEntries<T extends CategorySource>(

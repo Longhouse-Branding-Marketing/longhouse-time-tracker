@@ -32,6 +32,7 @@ function aggregate(
     { hours: number; entries: number; people: Set<string> }
   >();
   for (const row of rows) {
+    if (row.is_time_off) continue;
     const name = bucketKey(row, field);
     const agg =
       map.get(name) ??
@@ -54,6 +55,7 @@ function aggregate(
 function personHours(rows: EntryRow[]) {
   const map = new Map<string, number>();
   for (const row of rows) {
+    if (row.is_time_off) continue;
     map.set(row.person, (map.get(row.person) ?? 0) + n(row.hours));
   }
   return Array.from(map.entries())
